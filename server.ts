@@ -91,7 +91,7 @@ async function startServer() {
     const params = new URLSearchParams({
       client_id: clientId,
       redirect_uri: redirectUri,
-      response_type: 'code',
+      response_type: 'token',
       scope: 'identify email',
       prompt: 'consent',
     });
@@ -108,9 +108,9 @@ async function startServer() {
 
   // GET /api/auth/discord/callback - Official Discord OAuth2 redirect callback
   app.get('/api/auth/discord/callback', async (req, res) => {
-    const { code, error } = req.query;
+    const { error } = req.query;
 
-    if (error || !code) {
+    if (error) {
       return res.send(`
         <!DOCTYPE html>
         <html>
@@ -134,117 +134,98 @@ async function startServer() {
       `);
     }
 
-    const clientId = discordAuthConfig.clientId || process.env.DISCORD_CLIENT_ID || '1553795964215627836';
-    const clientSecret = discordAuthConfig.clientSecret || process.env.DISCORD_CLIENT_SECRET || '';
-    
-    const appUrl = getAppUrl(req);
-    const redirectUri = `${appUrl}/api/auth/discord/callback`;
-
-    try {
-      if (!clientId || !clientSecret) {
-        throw new Error('Chưa thiết lập Client Secret cho ứng dụng Discord OAuth2.');
-      }
-
-      // 1. Exchange OAuth code for tokens with official Discord API
-      const tokenRes = await fetch('https://discord.com/api/v10/oauth2/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-          client_id: clientId,
-          client_secret: clientSecret,
-          grant_type: 'authorization_code',
-          code: String(code),
-          redirect_uri: redirectUri,
-        }),
-      });
-
-      const tokenData = await tokenRes.json();
-
-      if (!tokenRes.ok) {
-        console.error('Discord Token Exchange Error:', tokenData);
-        const detailMsg = tokenData.error_description || tokenData.error || JSON.stringify(tokenData);
-        throw new Error(`Discord API Báo Lỗi: ${detailMsg}`);
-      }
-
-      // 2. Fetch official user profile from Discord API @me endpoint
-      const userRes = await fetch('https://discord.com/api/v10/users/@me', {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      });
-
-      const discordUser = await userRes.json();
-
-      if (!userRes.ok) {
-        throw new Error('Không thể lấy thông tin người dùng từ Discord');
-      }
-
-      // Format official Discord CDN Avatar URL
-      const avatarUrl = discordUser.avatar
-        ? `https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=256`
-        : `https://cdn.discordapp.com/embed/avatars/${parseInt(discordUser.id) % 5}.png`;
-
-      const realUserProfile = {
-        id: discordUser.id,
-        username: discordUser.username,
-        globalName: discordUser.global_name || discordUser.username,
-        discriminator: discordUser.discriminator || '0',
-        avatar: avatarUrl,
-        email: discordUser.email || '',
-        bannerColor: discordUser.banner_color || '#5865F2',
-      };
-
-      res.send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Discord OAuth Success</title>
-            <style>
-              body { background: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-              .card { background: #1e293b; padding: 2rem; border-radius: 1rem; text-align: center; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-              .avatar { width: 72px; height: 72px; border-radius: 50%; margin-bottom: 1rem; border: 3px solid #5865f2; }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <img src="${realUserProfile.avatar}" class="avatar" />
-              <h2 style="margin:0 0 0.5rem 0;">🎉 Đăng nhập Discord thành công!</h2>
-              <p style="color:#94a3b8;margin:0;">Đã xác thực tài khoản <strong>@${realUserProfile.globalName}</strong> (${realUserProfile.id})</p>
-            </div>
-            <script>
-              if (window.opener) {
-                window.opener.postMessage({
-                  type: 'OAUTH_AUTH_SUCCESS',
-                  provider: 'discord',
-                  user: ${JSON.stringify(realUserProfile)}
-                }, '*');
-                setTimeout(() => window.close(), 600);
-              } else {
-                window.location.href = '/';
+    // Dual-mode Callback: Process Implicit Token directly in Browser (Bypasses server IP rate-limits 100%)
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Xác Thực Discord...</title>
+          <meta charset="utf-8" />
+          <style>
+            body { background: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+            .card { background: #1e293b; padding: 2.5rem; border-radius: 1rem; text-align: center; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 420px; }
+            .spinner { width: 42px; height: 42px; border: 3px solid #334155; border-top-color: #5865f2; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.2rem; }
+            @keyframes spin { to { transform: rotate(360deg); } }
+            .avatar { width: 72px; height: 72px; border-radius: 50%; border: 3px solid #22c55e; margin: 0 auto 1rem; }
+          </style>
+        </head>
+        <body>
+          <div class="card" id="app-box">
+            <div class="spinner"></div>
+            <h3 style="margin:0;color:#5865f2;">Đang kết nối tài khoản Discord...</h3>
+            <p style="color:#94a3b8;font-size:13px;margin-top:0.5rem;">Vui lòng chờ trong giây lát</p>
+          </div>
+          <script>
+            async function handleDiscordAuth() {
+              const hash = window.location.hash;
+              const search = window.location.search;
+              
+              // 1. Client-Side Implicit Token Flow (Bypasses server IP rate limits 100%)
+              let token = null;
+              if (hash && hash.includes('access_token')) {
+                const params = new URLSearchParams(hash.substring(1));
+                token = params.get('access_token');
               }
-            </script>
-          </body>
-        </html>
-      `);
-    } catch (err: any) {
-      res.status(500).send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Discord OAuth Error</title>
-            <style>
-              body { background: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-              .card { background: #1e293b; padding: 2rem; border-radius: 1rem; text-align: center; border: 1px solid #ef4444; max-width: 480px; }
-            </style>
-          </head>
-          <body>
-            <div class="card">
-              <h2 style="color: #ef4444; margin-top: 0;">❌ Lỗi Xác Thực Discord API</h2>
-              <p style="color: #cbd5e1; font-size: 14px;">${err.message}</p>
-              <p style="color: #94a3b8; font-size: 12px; margin-top: 1rem;">Vui lòng kiểm tra lại Client Secret ứng dụng Discord của bạn.</p>
-            </div>
-          </body>
-        </html>
-      `);
-    }
+
+              if (token) {
+                try {
+                  const res = await fetch('https://discord.com/api/v10/users/@me', {
+                    headers: { Authorization: 'Bearer ' + token }
+                  });
+                  if (!res.ok) throw new Error('Không thể lấy hồ sơ Discord');
+                  const discordUser = await res.json();
+                  
+                  const avatarUrl = discordUser.avatar
+                    ? 'https://cdn.discordapp.com/avatars/' + discordUser.id + '/' + discordUser.avatar + '.png?size=256'
+                    : 'https://cdn.discordapp.com/embed/avatars/' + (parseInt(discordUser.id) % 5) + '.png';
+
+                  const realUserProfile = {
+                    id: discordUser.id,
+                    username: discordUser.username,
+                    globalName: discordUser.global_name || discordUser.username,
+                    discriminator: discordUser.discriminator || '0',
+                    avatar: avatarUrl,
+                    email: discordUser.email || '',
+                    bannerColor: discordUser.banner_color || '#5865F2',
+                  };
+
+                  document.getElementById('app-box').innerHTML = \`
+                    <img src="\${avatarUrl}" class="avatar" />
+                    <h2 style="margin:0 0 0.5rem 0;color:#22c55e;">🎉 Thành Công!</h2>
+                    <p style="color:#cbd5e1;margin:0;font-size:14px;">Đã xác thực @\${realUserProfile.globalName}</p>
+                  \`;
+
+                  if (window.opener) {
+                    window.opener.postMessage({
+                      type: 'OAUTH_AUTH_SUCCESS',
+                      provider: 'discord',
+                      user: realUserProfile
+                    }, '*');
+                    setTimeout(() => window.close(), 700);
+                  } else {
+                    window.location.href = '/';
+                  }
+                  return;
+                } catch (e) {
+                  console.error(e);
+                  document.getElementById('app-box').innerHTML = \`
+                    <h3 style="color:#ef4444;">❌ Lỗi truy vấn API Discord</h3>
+                    <p style="color:#94a3b8;font-size:13px;">\${e.message || 'Lỗi không xác định'}</p>
+                  \`;
+                  return;
+                }
+              }
+
+              document.getElementById('app-box').innerHTML = \`
+                <h3 style="color:#ef4444;">❌ Không tìm thấy Token xác thực</h3>
+                <p style="color:#94a3b8;font-size:13px;">Vui lòng đóng cửa sổ và thử bấm đăng nhập lại.</p>
+              \`;
+            }
+            handleDiscordAuth();
+          </script>
+        </body>
+      </html>
+    `);
   });
 
   // POST /api/user/sync - Sync user account data
