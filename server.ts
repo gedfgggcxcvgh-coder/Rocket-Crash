@@ -335,15 +335,21 @@ async function startServer() {
       return res.status(400).json({ error: 'Rất tiếc! Đợt cược ván này đã kết thúc.' });
     }
 
-    if (userDatabase[userId]) {
-      if ((userDatabase[userId].balance || 0) < betAmount) {
-        return res.status(400).json({ error: 'Không đủ số dư Xu.' });
-      }
-      userDatabase[userId].balance -= betAmount;
-      try {
-        fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
-      } catch {}
+    if (!userDatabase[userId]) {
+      userDatabase[userId] = {
+        id: userId,
+        username: username || 'Khách',
+        balance: 1000000,
+      };
     }
+
+    if ((userDatabase[userId].balance || 0) < betAmount) {
+      return res.status(400).json({ error: 'Không đủ số dư Xu.' });
+    }
+    userDatabase[userId].balance -= betAmount;
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch {}
 
     const existingIndex = globalGameState.players.findIndex(p => p.id === userId);
     if (existingIndex >= 0) {

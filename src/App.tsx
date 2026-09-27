@@ -383,8 +383,20 @@ export default function App() {
               // Check if current user cashed out on server
               const me = data.players.find((p: any) => p.id === currentUserId);
               if (me && me.status === 'CASHED_OUT' && !userCashedOut) {
+                sounds.playCashoutWin();
                 setUserCashedOut(true);
-                setUserCashoutMultiplier(me.cashoutMultiplier);
+                const finalMult = me.cashoutMultiplier || me.targetMultiplier || 1.0;
+                setUserCashoutMultiplier(finalMult);
+                const winAmount = Math.floor(me.betAmount * finalMult);
+                setBalance(prev => prev + winAmount);
+                const netProfit = winAmount - me.betAmount;
+                setStats(prev => ({
+                  ...prev,
+                  totalGames: prev.totalGames + 1,
+                  wins: prev.wins + 1,
+                  totalProfit: prev.totalProfit + netProfit,
+                  highestMultiplier: Math.max(prev.highestMultiplier, finalMult),
+                }));
               }
             }
 
