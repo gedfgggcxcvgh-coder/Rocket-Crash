@@ -101,6 +101,34 @@ async function startServer() {
     isBot?: boolean;
   }
 
+  interface ChatMessageServer {
+    id: string;
+    user: string;
+    avatar: string;
+    text: string;
+    time: string;
+    badge?: string;
+    isSystem?: boolean;
+  }
+
+  let globalChatMessages: ChatMessageServer[] = [
+    { id: '1', user: 'Huy_CháyTúi', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Huy', text: 'Má ván trước vừa vào định gồng x50 thì toang, cay dái thật', time: '14:26' },
+    { id: '2', user: 'Tuấn_TayTo', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan', text: 'Non thì chịu đi chú em, vừa làm phát 50k xu ấm cật haha', time: '14:27' },
+    { id: '3', user: 'Bảo_AllIn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Bao', text: 'Ván này bố m tất tay khô máu, đéo tin k lên nổi x10!', time: '14:28' },
+    { id: '4', user: 'Nam_ĂnNon', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nam', text: 'Cứ 2x tao nhảy, ăn non cho lành cãi nhau làm đéo gì', time: '14:29' },
+  ];
+
+  function addServerChatMessage(msg: Omit<ChatMessageServer, 'id'>) {
+    const newMsg: ChatMessageServer = {
+      ...msg,
+      id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 6),
+    };
+    globalChatMessages.push(newMsg);
+    if (globalChatMessages.length > 50) {
+      globalChatMessages.shift();
+    }
+  }
+
   let currentSeed = serverGenerateSeed();
   let currentHash = serverSha256(currentSeed);
   let currentCrashPoint = serverCalculateMultiplier(currentSeed);
@@ -158,6 +186,7 @@ async function startServer() {
   function broadcastGameState() {
     const payload = JSON.stringify({
       ...globalGameState,
+      chat: globalChatMessages,
       serverTime: Date.now(),
     });
     sseClients.forEach(client => {
@@ -193,6 +222,22 @@ async function startServer() {
           }
         });
 
+        // Add crash comment from bot
+        const crashMultStr = globalGameState.crashPoint.toFixed(2);
+        const randBot = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+        const crashSlangs = [
+          `Vcl nổ ở ${crashMultStr}x, bay cụ nó tiền cược rồi! 😭`,
+          `Nổ sớm thế nhở ${crashMultStr}x, cay vãi nồi!`,
+          `Hahaha may mà chốt sớm, nhường các bố gồng tiếp!`,
+          `BÙM ở ${crashMultStr}x!! Bị nuốt sạch cắc nào rồi!`,
+        ];
+        addServerChatMessage({
+          user: randBot,
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${randBot}`,
+          text: crashSlangs[Math.floor(Math.random() * crashSlangs.length)],
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+
         globalGameState.history.unshift({
           id: globalGameState.roundId,
           seed: globalGameState.seed,
@@ -210,6 +255,17 @@ async function startServer() {
           if (p.status === 'PENDING' && p.targetMultiplier && currentMult >= p.targetMultiplier) {
             p.status = 'CASHED_OUT';
             p.cashoutMultiplier = p.targetMultiplier;
+
+            // Optional bot flex in chat
+            if (p.isBot && Math.random() < 0.15) {
+              const win = Math.floor(p.betAmount * p.targetMultiplier);
+              addServerChatMessage({
+                user: p.username,
+                avatar: p.avatar,
+                text: `Húp +${win.toLocaleString('vi-VN')} Xu ở ${p.targetMultiplier.toFixed(2)}x, ấm cật rồi ae! 🤑`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              });
+            }
 
             if (!p.isBot && userDatabase[p.id]) {
               const win = Math.floor(p.betAmount * p.targetMultiplier);
@@ -351,6 +407,25 @@ async function startServer() {
       winAmount,
       newBalance: userDatabase[userId]?.balance,
     });
+  });
+
+  // POST /api/chat/send - Send chat message
+  app.post('/api/chat/send', (req, res) => {
+    const { user, avatar, badge, text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Nội dung tin nhắn trống.' });
+    }
+
+    addServerChatMessage({
+      user: user || 'Khách',
+      avatar: avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest',
+      badge,
+      text: text.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    });
+
+    broadcastGameState();
+    res.json({ success: true });
   });
 
   // POST /api/auth/discord/config - Save dynamic Client ID and Client Secret permanently

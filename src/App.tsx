@@ -299,6 +299,7 @@ export default function App() {
   // --- REALTIME GLOBAL SERVER STREAM (SSE) ---
   const currentRoundIdRef = useRef<string>('');
   const prevPhaseRef = useRef<GamePhase>('COUNTDOWN');
+  const flightStartTimeMsRef = useRef<number>(0);
 
   useEffect(() => {
     let eventSource: EventSource | null = null;
@@ -323,10 +324,21 @@ export default function App() {
 
             setPhase(data.status);
             setCountdown(data.countdown);
-            setMultiplier(data.multiplier);
             setCrashPoint(data.crashPoint);
             setCurrentSeed(data.seed);
             setCurrentHash(data.hash);
+
+            if (data.status === 'FLYING' && data.startTime) {
+              flightStartTimeMsRef.current = data.startTime;
+            } else if (data.status === 'CRASHED') {
+              setMultiplier(data.crashPoint);
+            } else if (data.status === 'COUNTDOWN') {
+              setMultiplier(1.00);
+            }
+
+            if (Array.isArray(data.chat)) {
+              setMessages(data.chat);
+            }
 
             if (Array.isArray(data.history)) {
               setHistory(data.history.map((h: any) => ({
@@ -395,6 +407,24 @@ export default function App() {
       if (eventSource) eventSource.close();
     };
   }, [discordUser?.id, userCashedOut]);
+
+  // Smooth 60 FPS flight multiplier interpolation
+  useEffect(() => {
+    if (phase !== 'FLYING') return;
+
+    let animFrame: number;
+    const updateSmoothMultiplier = () => {
+      if (flightStartTimeMsRef.current > 0) {
+        const elapsedSec = (Date.now() - flightStartTimeMsRef.current) / 1000;
+        const currentMult = parseFloat(Math.max(1.00, Math.pow(Math.E, 0.06 * elapsedSec)).toFixed(2));
+        setMultiplier(prev => (currentMult > prev ? Math.min(currentMult, crashPoint) : prev));
+      }
+      animFrame = requestAnimationFrame(updateSmoothMultiplier);
+    };
+
+    animFrame = requestAnimationFrame(updateSmoothMultiplier);
+    return () => cancelAnimationFrame(animFrame);
+  }, [phase, crashPoint]);
 
   // Handle Mode Change
   const handleSelectFlightMode = (newMode: FlightMode) => {
@@ -680,21 +710,26 @@ export default function App() {
     sounds.setMuted(next);
   };
 
-  // Send message to chat
-  const handleSendMessage = (text: string) => {
+  // Send message to global chat via Server API
+  const handleSendMessage = async (text: string) => {
+    if (!text || !text.trim()) return;
     const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
     const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
-    setMessages(prev => [
-      ...prev.slice(-30),
-      {
-        id: Date.now().toString(),
-        user: userDisplayName,
-        avatar: userAvatar,
-        badge: discordUser ? 'DISCORD' : 'VIP',
-        text,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ]);
+
+    try {
+      await fetch('/api/chat/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: userDisplayName,
+          avatar: userAvatar,
+          badge: discordUser ? 'DISCORD' : 'VIP',
+          text,
+        }),
+      });
+    } catch (err) {
+      console.error('Chat API error:', err);
+    }
   };
 
   // Handle Discord Account login & logout state transitions
