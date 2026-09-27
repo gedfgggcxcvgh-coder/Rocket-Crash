@@ -10,6 +10,7 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const CONFIG_FILE_PATH = path.join(__dirname, 'discord-oauth-config.json');
+const USER_DB_FILE_PATH = path.join(__dirname, 'user-database.json');
 
 async function startServer() {
   const app = express();
@@ -48,8 +49,15 @@ async function startServer() {
     console.error('Failed to read discord-oauth-config.json:', err);
   }
 
-  // In-memory user database store for Discord linked accounts
-  const userDatabase: Record<string, any> = {};
+  // Persistent user database store for Discord linked accounts across devices
+  let userDatabase: Record<string, any> = {};
+  try {
+    if (fs.existsSync(USER_DB_FILE_PATH)) {
+      userDatabase = JSON.parse(fs.readFileSync(USER_DB_FILE_PATH, 'utf-8'));
+    }
+  } catch (err) {
+    console.error('Failed to read user-database.json:', err);
+  }
 
   // POST /api/auth/discord/config - Save dynamic Client ID and Client Secret permanently
   app.post('/api/auth/discord/config', (req, res) => {
@@ -243,6 +251,12 @@ async function startServer() {
       stats,
       lastSyncedAt: Date.now(),
     };
+
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch (err) {
+      console.error('Failed to write user-database.json:', err);
+    }
 
     res.json({ success: true, saved: userDatabase[discordId] });
   });

@@ -67,15 +67,15 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
 
   // Listen for OAuth postMessage from Discord Login Popup
   useEffect(() => {
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = async (event: MessageEvent) => {
       const data = event.data;
       if (data && (data.type === 'OAUTH_AUTH_SUCCESS' || data.provider === 'discord') && data.user) {
         sounds.playCashoutWin();
         const rawUser = data.user;
-        const user = createDiscordUserFromOAuthProfile(rawUser, userBalance, userStats);
+        const user = await createDiscordUserFromOAuthProfile(rawUser, userBalance, userStats);
         onUpdateDiscordUser(user);
         onApplyBalanceAndStats(user.balance);
-        setSyncStatus(`🎉 Đăng nhập Discord thành công! Chào mừng @${user.globalName || user.username} (+5.000 Xu Thưởng).`);
+        setSyncStatus(`🎉 Đăng nhập Discord thành công! Chào mừng @${user.globalName || user.username} (+500.000 Xu Thưởng).`);
         setTimeout(() => setSyncStatus(null), 4000);
       }
     };
@@ -87,13 +87,13 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
   if (!isOpen) return null;
 
   // Handle direct connect
-  const handleConnect = (tagToUse?: string) => {
+  const handleConnect = async (tagToUse?: string) => {
     sounds.playClick();
     const targetTag = tagToUse || discordInput.trim() || 'PhiCông_Discord#1337';
-    const user = connectDiscordDirect(targetTag, userBalance, userStats);
+    const user = await connectDiscordDirect(targetTag, userBalance, userStats);
     onUpdateDiscordUser(user);
     onApplyBalanceAndStats(user.balance);
-    setSyncStatus('🎉 Liên kết tài khoản Discord thành công! Đã cộng +5.000 Xu thưởng.');
+    setSyncStatus('🎉 Liên kết tài khoản Discord thành công! Đã cộng +500.000 Xu thưởng.');
     setTimeout(() => setSyncStatus(null), 3500);
   };
 

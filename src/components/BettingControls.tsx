@@ -82,12 +82,12 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
         </div>
 
         <button
-          onClick={() => onAddFunds(5000)}
+          onClick={() => onAddFunds(500000)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-600/50 hover:bg-emerald-900/80 text-emerald-400 text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer"
-          title="Nhận 5.000 Xu miễn phí để trải nghiệm cược"
+          title="Nhận 500.000 Xu miễn phí để trải nghiệm cược"
         >
           <PlusCircle className="w-3.5 h-3.5" />
-          <span>+5.000 Xu Miễn Phí</span>
+          <span>+500.000 Xu Miễn Phí</span>
         </button>
       </div>
 
