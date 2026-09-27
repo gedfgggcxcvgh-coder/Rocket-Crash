@@ -118,7 +118,7 @@ async function startServer() {
     { id: '4', user: 'Nam_ĂnNon', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nam', text: 'Cứ 2x tao nhảy, ăn non cho lành cãi nhau làm đéo gì', time: '14:29' },
   ];
 
-  function addServerChatMessage(msg: Omit<ChatMessageServer, 'id'>) {
+  function addServerChatMessage(msg: Omit<ChatMessageServer, 'id'>): ChatMessageServer {
     const newMsg: ChatMessageServer = {
       ...msg,
       id: Date.now().toString() + '_' + Math.random().toString(36).substring(2, 6),
@@ -127,6 +127,7 @@ async function startServer() {
     if (globalChatMessages.length > 50) {
       globalChatMessages.shift();
     }
+    return newMsg;
   }
 
   let currentSeed = serverGenerateSeed();
@@ -416,7 +417,7 @@ async function startServer() {
       return res.status(400).json({ error: 'Nội dung tin nhắn trống.' });
     }
 
-    addServerChatMessage({
+    const createdMsg = addServerChatMessage({
       user: user || 'Khách',
       avatar: avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest',
       badge,
@@ -425,7 +426,7 @@ async function startServer() {
     });
 
     broadcastGameState();
-    res.json({ success: true });
+    res.json({ success: true, message: createdMsg });
   });
 
   // POST /api/auth/discord/config - Save dynamic Client ID and Client Secret permanently

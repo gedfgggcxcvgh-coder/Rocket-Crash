@@ -1,0 +1,18 @@
+{
+  "1119979396422439045": {
+    "discordId": "1119979396422439045",
+    "username": "Vodka",
+    "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
+    "balance": 10560000,
+    "stats": {
+      "balance": 10560000,
+      "totalGames": 5,
+      "wins": 2,
+      "losses": 3,
+      "totalProfit": -295000,
+      "highestMultiplier": 3.13,
+      "totalWagered": 3924760
+    },
+    "lastSyncedAt": 1790533553067
+  }
+}

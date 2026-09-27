@@ -131,7 +131,17 @@ export default function App() {
 
     const handleSyncMessage = (event: MessageEvent) => {
       const data = event.data;
-      if (!data || data.tabId === TAB_ID || data.type !== 'SYNC_ACCOUNT_STATE') return;
+      if (!data) return;
+
+      if (data.type === 'SYNC_CHAT_MESSAGE' && data.msg) {
+        setMessages(prev => {
+          if (prev.some(m => m.id === data.msg.id)) return prev;
+          return [...prev.slice(-40), data.msg];
+        });
+        return;
+      }
+
+      if (data.tabId === TAB_ID || data.type !== 'SYNC_ACCOUNT_STATE') return;
 
       if (data.discordUser !== undefined) {
         setDiscordUser(data.discordUser);
@@ -337,7 +347,12 @@ export default function App() {
             }
 
             if (Array.isArray(data.chat)) {
-              setMessages(data.chat);
+              setMessages(prev => {
+                const pendingTemps = prev.filter(m => m.id.startsWith('temp_'));
+                const serverIds = new Set(data.chat.map((m: any) => m.id));
+                const uniqueTemps = pendingTemps.filter(m => !serverIds.has(m.id));
+                return [...data.chat, ...uniqueTemps];
+              });
             }
 
             if (Array.isArray(data.history)) {
@@ -715,18 +730,44 @@ export default function App() {
     if (!text || !text.trim()) return;
     const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
     const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
+    const tempId = 'temp_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+
+    const tempMsg: ChatMessage = {
+      id: tempId,
+      user: userDisplayName,
+      avatar: userAvatar,
+      badge: discordUser ? 'DISCORD' : 'VIP',
+      text: text.trim(),
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+
+    // Optimistically add to UI immediately
+    setMessages(prev => [...prev.slice(-40), tempMsg]);
+
+    // Broadcast locally across tabs
+    if (syncChannel) {
+      syncChannel.postMessage({
+        type: 'SYNC_CHAT_MESSAGE',
+        msg: tempMsg,
+      });
+    }
 
     try {
-      await fetch('/api/chat/send', {
+      const res = await fetch('/api/chat/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user: userDisplayName,
           avatar: userAvatar,
           badge: discordUser ? 'DISCORD' : 'VIP',
-          text,
+          text: text.trim(),
         }),
       });
+
+      const data = await res.json();
+      if (res.ok && data.message) {
+        setMessages(prev => prev.map(m => (m.id === tempId ? data.message : m)));
+      }
     } catch (err) {
       console.error('Chat API error:', err);
     }
