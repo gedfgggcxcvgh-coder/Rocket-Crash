@@ -98,13 +98,28 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
           <button
             type="button"
             onClick={onCashout}
-            className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] text-slate-950 font-black text-xl md:text-2xl shadow-xl shadow-emerald-500/25 border-2 border-emerald-300 transition-all flex items-center justify-center gap-3 cursor-pointer group animate-pulse"
+            disabled={autoCashoutEnabled}
+            className={`w-full py-4 px-6 rounded-2xl font-black text-xl md:text-2xl transition-all flex items-center justify-center gap-3 ${
+              autoCashoutEnabled
+                ? 'bg-slate-800/90 border-2 border-slate-700 text-slate-400 opacity-80 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] text-slate-950 shadow-xl shadow-emerald-500/25 border-2 border-emerald-300 animate-pulse cursor-pointer group'
+            }`}
           >
-            <Zap className="w-7 h-7 text-slate-950 fill-current animate-bounce" />
+            {autoCashoutEnabled ? (
+              <Shield className="w-7 h-7 text-amber-400 shrink-0" />
+            ) : (
+              <Zap className="w-7 h-7 text-slate-950 fill-current animate-bounce shrink-0" />
+            )}
             <div className="flex flex-col items-center leading-none">
-              <span>DỪNG LẠI & CHỐT LỜI (CASH OUT)</span>
+              <span>
+                {autoCashoutEnabled
+                  ? `TỰ ĐỘNG CHỐT LỜI TẠI ${autoCashoutTarget.toFixed(2)}x (ĐÃ KHÓA)`
+                  : 'DỪNG LẠI & CHỐT LỜI (CASH OUT)'}
+              </span>
               <span className="text-sm font-bold font-mono-numbers opacity-90 mt-1">
-                Nhận +{projectedWin.toLocaleString('vi-VN')} Xu tại {currentMultiplier.toFixed(2)}x
+                {autoCashoutEnabled
+                  ? `Nút thủ công đã khóa - Tự động dừng tại ${autoCashoutTarget.toFixed(2)}x (+${Math.floor(userBet * autoCashoutTarget).toLocaleString('vi-VN')} Xu)`
+                  : `Nhận +${projectedWin.toLocaleString('vi-VN')} Xu tại ${currentMultiplier.toFixed(2)}x`}
               </span>
             </div>
           </button>

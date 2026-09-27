@@ -59,6 +59,299 @@ async function startServer() {
     console.error('Failed to read user-database.json:', err);
   }
 
+  // --- GLOBAL SERVER GAME STATE ENGINE ---
+  function serverSha256(message: string): string {
+    return crypto.createHash('sha256').update(message).digest('hex');
+  }
+
+  function serverGenerateSeed(): string {
+    return crypto.randomBytes(16).toString('hex');
+  }
+
+  function serverCalculateMultiplier(seed: string): number {
+    let hashVal = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hashVal = (hashVal * 31 + seed.charCodeAt(i)) & 0xffffffff;
+    }
+    const r = (Math.abs(hashVal) % 100000) / 100000;
+    if (r < 0.05) return parseFloat((1.05 + (r / 0.05) * 0.20).toFixed(2));
+    if (r < 0.21) return parseFloat((1.26 + ((r - 0.05) / 0.16) * 0.62).toFixed(2));
+    if (r < 0.59) return parseFloat((1.89 + Math.pow((r - 0.21) / 0.38, 1.15) * 2.91).toFixed(2));
+    if (r < 0.82) return parseFloat((4.81 + Math.pow((r - 0.59) / 0.23, 1.25) * 9.69).toFixed(2));
+    if (r < 0.94) return parseFloat((14.51 + Math.pow((r - 0.82) / 0.12, 1.35) * 30.49).toFixed(2));
+    return parseFloat((45.00 + Math.pow((r - 0.94) / 0.06, 1.5) * 243.00).toFixed(2));
+  }
+
+  const BOT_NAMES = [
+    'ThánhGồng_x100', 'Bảo_AllIn', 'Long_CayCú', 'Dũng_HúpBạc', 
+    'Trùm_NổSớm', 'Huy_CháyTúi', 'Tuấn_TayTo', 'Sơn_NonTay', 
+    'Đạt_GỡNợ', 'Khang_BịpVcl', 'Phúc_KhôMáu', 'Nam_ĂnNon',
+    'AnhBa_BaoSàn', 'Tùng_ChốtNon', 'Minh_TayVàng'
+  ];
+
+  interface PlayerBetServer {
+    id: string;
+    username: string;
+    avatar: string;
+    betAmount: number;
+    cashoutMultiplier?: number;
+    targetMultiplier?: number;
+    status: 'PENDING' | 'CASHED_OUT' | 'CRASHED';
+    isBot?: boolean;
+  }
+
+  let currentSeed = serverGenerateSeed();
+  let currentHash = serverSha256(currentSeed);
+  let currentCrashPoint = serverCalculateMultiplier(currentSeed);
+
+  let globalGameState = {
+    roundId: Date.now().toString(),
+    status: 'COUNTDOWN' as 'COUNTDOWN' | 'FLYING' | 'CRASHED',
+    countdown: 5.0,
+    multiplier: 1.00,
+    crashPoint: currentCrashPoint,
+    seed: currentSeed,
+    hash: currentHash,
+    startTime: 0,
+    crashedAt: null as number | null,
+    history: [
+      { id: '1', seed: 'init1', hash: 'hash1', crashPoint: 1.85, timestamp: Date.now() - 60000 },
+      { id: '2', seed: 'init2', hash: 'hash2', crashPoint: 12.40, timestamp: Date.now() - 50000 },
+      { id: '3', seed: 'init3', hash: 'hash3', crashPoint: 1.05, timestamp: Date.now() - 40000 },
+      { id: '4', seed: 'init4', hash: 'hash4', crashPoint: 3.20, timestamp: Date.now() - 30000 },
+      { id: '5', seed: 'init5', hash: 'hash5', crashPoint: 15.80, timestamp: Date.now() - 20000 },
+      { id: '6', seed: 'init6', hash: 'hash6', crashPoint: 1.42, timestamp: Date.now() - 10000 },
+    ],
+    players: [] as PlayerBetServer[],
+  };
+
+  function generateServerBots(): PlayerBetServer[] {
+    const count = Math.floor(Math.random() * 6) + 6;
+    const shuffled = [...BOT_NAMES].sort(() => 0.5 - Math.random()).slice(0, count);
+    const amounts = [1000, 2500, 5000, 10000, 20000, 35000, 50000, 100000];
+    return shuffled.map((name, idx) => {
+      const betAmount = amounts[Math.floor(Math.random() * amounts.length)];
+      const roll = Math.random();
+      let target: number;
+      if (roll < 0.35) target = parseFloat((Math.random() * 1.5 + 1.35).toFixed(2));
+      else if (roll < 0.75) target = parseFloat((Math.random() * 4.5 + 2.8).toFixed(2));
+      else if (roll < 0.92) target = parseFloat((Math.random() * 12 + 7.5).toFixed(2));
+      else target = parseFloat((Math.random() * 40 + 20).toFixed(2));
+
+      return {
+        id: `bot_${idx}_${Date.now()}`,
+        username: name,
+        avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${name}`,
+        betAmount,
+        targetMultiplier: target,
+        status: 'PENDING',
+        isBot: true,
+      };
+    });
+  }
+
+  globalGameState.players = generateServerBots();
+
+  let sseClients: Array<{ res: express.Response }> = [];
+
+  function broadcastGameState() {
+    const payload = JSON.stringify({
+      ...globalGameState,
+      serverTime: Date.now(),
+    });
+    sseClients.forEach(client => {
+      try {
+        client.res.write(`data: ${payload}\n\n`);
+      } catch {}
+    });
+  }
+
+  // Server Loop tick - 100ms
+  setInterval(() => {
+    const now = Date.now();
+
+    if (globalGameState.status === 'COUNTDOWN') {
+      globalGameState.countdown = Math.max(0, parseFloat((globalGameState.countdown - 0.1).toFixed(1)));
+      if (globalGameState.countdown <= 0) {
+        globalGameState.status = 'FLYING';
+        globalGameState.startTime = now;
+        globalGameState.multiplier = 1.00;
+      }
+    } else if (globalGameState.status === 'FLYING') {
+      const elapsedSec = (now - globalGameState.startTime) / 1000;
+      const currentMult = parseFloat(Math.pow(Math.E, 0.06 * elapsedSec).toFixed(2));
+
+      if (currentMult >= globalGameState.crashPoint) {
+        globalGameState.status = 'CRASHED';
+        globalGameState.multiplier = globalGameState.crashPoint;
+        globalGameState.crashedAt = now;
+
+        globalGameState.players.forEach(p => {
+          if (p.status === 'PENDING') {
+            p.status = 'CRASHED';
+          }
+        });
+
+        globalGameState.history.unshift({
+          id: globalGameState.roundId,
+          seed: globalGameState.seed,
+          hash: globalGameState.hash,
+          crashPoint: globalGameState.crashPoint,
+          timestamp: now,
+        });
+        if (globalGameState.history.length > 20) {
+          globalGameState.history.pop();
+        }
+      } else {
+        globalGameState.multiplier = currentMult;
+
+        globalGameState.players.forEach(p => {
+          if (p.status === 'PENDING' && p.targetMultiplier && currentMult >= p.targetMultiplier) {
+            p.status = 'CASHED_OUT';
+            p.cashoutMultiplier = p.targetMultiplier;
+
+            if (!p.isBot && userDatabase[p.id]) {
+              const win = Math.floor(p.betAmount * p.targetMultiplier);
+              userDatabase[p.id].balance = (userDatabase[p.id].balance || 0) + win;
+              try {
+                fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+              } catch {}
+            }
+          }
+        });
+      }
+    } else if (globalGameState.status === 'CRASHED') {
+      if (now - (globalGameState.crashedAt || 0) >= 3000) {
+        currentSeed = serverGenerateSeed();
+        currentHash = serverSha256(currentSeed);
+        currentCrashPoint = serverCalculateMultiplier(currentSeed);
+
+        globalGameState.roundId = now.toString();
+        globalGameState.status = 'COUNTDOWN';
+        globalGameState.countdown = 5.0;
+        globalGameState.multiplier = 1.00;
+        globalGameState.crashPoint = currentCrashPoint;
+        globalGameState.seed = currentSeed;
+        globalGameState.hash = currentHash;
+        globalGameState.crashedAt = null;
+        globalGameState.players = generateServerBots();
+      }
+    }
+
+    broadcastGameState();
+  }, 100);
+
+  // GET /api/game/state - Current State Snapshot
+  app.get('/api/game/state', (req, res) => {
+    res.json({
+      ...globalGameState,
+      serverTime: Date.now(),
+    });
+  });
+
+  // GET /api/game/stream - Real-time SSE Game Stream
+  app.get('/api/game/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    res.write(`data: ${JSON.stringify({ ...globalGameState, serverTime: Date.now() })}\n\n`);
+
+    const client = { res };
+    sseClients.push(client);
+
+    req.on('close', () => {
+      sseClients = sseClients.filter(c => c !== client);
+    });
+  });
+
+  // POST /api/game/bet - Place a bet
+  app.post('/api/game/bet', (req, res) => {
+    const { userId, username, avatar, betAmount, targetMultiplier } = req.body;
+    if (!userId || !betAmount || betAmount <= 0) {
+      return res.status(400).json({ error: 'Cược không hợp lệ.' });
+    }
+
+    if (globalGameState.status !== 'COUNTDOWN') {
+      return res.status(400).json({ error: 'Rất tiếc! Đợt cược ván này đã kết thúc.' });
+    }
+
+    if (userDatabase[userId]) {
+      if ((userDatabase[userId].balance || 0) < betAmount) {
+        return res.status(400).json({ error: 'Không đủ số dư Xu.' });
+      }
+      userDatabase[userId].balance -= betAmount;
+      try {
+        fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+      } catch {}
+    }
+
+    const existingIndex = globalGameState.players.findIndex(p => p.id === userId);
+    if (existingIndex >= 0) {
+      globalGameState.players[existingIndex] = {
+        id: userId,
+        username: username || 'Player',
+        avatar: avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Player',
+        betAmount,
+        targetMultiplier,
+        status: 'PENDING',
+        isBot: false,
+      };
+    } else {
+      globalGameState.players.unshift({
+        id: userId,
+        username: username || 'Player',
+        avatar: avatar || 'https://api.dicebear.com/7.x/bottts/svg?seed=Player',
+        betAmount,
+        targetMultiplier,
+        status: 'PENDING',
+        isBot: false,
+      });
+    }
+
+    broadcastGameState();
+    res.json({ success: true, newBalance: userDatabase[userId]?.balance });
+  });
+
+  // POST /api/game/cashout - Cashout bet
+  app.post('/api/game/cashout', (req, res) => {
+    const { userId } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+
+    if (globalGameState.status !== 'FLYING') {
+      return res.status(400).json({ error: 'Tên lửa không trong trạng thái bay.' });
+    }
+
+    const player = globalGameState.players.find(p => p.id === userId);
+    if (!player || player.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Không tìm thấy cược mở.' });
+    }
+
+    const currentMult = globalGameState.multiplier;
+    player.status = 'CASHED_OUT';
+    player.cashoutMultiplier = currentMult;
+
+    const winAmount = Math.floor(player.betAmount * currentMult);
+
+    if (userDatabase[userId]) {
+      userDatabase[userId].balance = (userDatabase[userId].balance || 0) + winAmount;
+      try {
+        fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+      } catch {}
+    }
+
+    broadcastGameState();
+    res.json({
+      success: true,
+      cashoutMultiplier: currentMult,
+      winAmount,
+      newBalance: userDatabase[userId]?.balance,
+    });
+  });
+
   // POST /api/auth/discord/config - Save dynamic Client ID and Client Secret permanently
   app.post('/api/auth/discord/config', (req, res) => {
     const { clientId, clientSecret } = req.body;

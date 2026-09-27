@@ -406,10 +406,105 @@ export default function App() {
     }
   }, []);
 
-  // Initial mount
+  // --- REALTIME GLOBAL SERVER STREAM (SSE) ---
+  const currentRoundIdRef = useRef<string>('');
+  const prevPhaseRef = useRef<GamePhase>('COUNTDOWN');
+
   useEffect(() => {
-    initNewRound();
-  }, [initNewRound]);
+    let eventSource: EventSource | null = null;
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource('/api/game/stream');
+
+        eventSource.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (!data) return;
+
+            // Reset round states if round changed
+            if (data.roundId !== currentRoundIdRef.current) {
+              currentRoundIdRef.current = data.roundId;
+              setCurrentRoundId(data.roundId);
+              setUserCashedOut(false);
+              setUserCashoutMultiplier(undefined);
+              setUserBet(0);
+            }
+
+            setPhase(data.status);
+            setCountdown(data.countdown);
+            setMultiplier(data.multiplier);
+            setCrashPoint(data.crashPoint);
+            setCurrentSeed(data.seed);
+            setCurrentHash(data.hash);
+
+            if (Array.isArray(data.history)) {
+              setHistory(data.history.map((h: any) => ({
+                id: h.id,
+                multiplier: h.crashPoint,
+                timestamp: h.timestamp || Date.now(),
+                seed: h.seed,
+                hash: h.hash,
+                mode: 'HIGH_FLYER',
+              })));
+            }
+
+            if (Array.isArray(data.players)) {
+              const currentUserId = discordUser?.id || 'guest_user';
+              const mappedPlayers: PlayerBet[] = data.players.map((p: any) => ({
+                id: p.id,
+                username: p.username,
+                avatar: p.avatar,
+                betAmount: p.betAmount,
+                cashoutMultiplier: p.cashoutMultiplier || p.targetMultiplier,
+                status: p.status === 'CASHED_OUT' ? 'WON' : p.status === 'CRASHED' ? 'LOST' : 'FLYING',
+                winAmount: p.cashoutMultiplier ? Math.floor(p.betAmount * p.cashoutMultiplier) : undefined,
+                isCurrentUser: p.id === currentUserId,
+              }));
+              setPlayers(mappedPlayers);
+
+              // Check if current user cashed out on server
+              const me = data.players.find((p: any) => p.id === currentUserId);
+              if (me && me.status === 'CASHED_OUT' && !userCashedOut) {
+                setUserCashedOut(true);
+                setUserCashoutMultiplier(me.cashoutMultiplier);
+              }
+            }
+
+            // Audio & Phase transition effects
+            if (prevPhaseRef.current !== data.status) {
+              if (data.status === 'FLYING') {
+                sounds.startEngine();
+              } else if (data.status === 'CRASHED') {
+                sounds.stopEngine();
+                sounds.playExplosion();
+              } else if (data.status === 'COUNTDOWN') {
+                sounds.playCountdownBeep(false);
+              }
+              prevPhaseRef.current = data.status;
+            }
+          } catch (err) {
+            console.error('SSE parse error:', err);
+          }
+        };
+
+        eventSource.onerror = () => {
+          if (eventSource) {
+            eventSource.close();
+            setTimeout(connectSSE, 2000);
+          }
+        };
+      } catch (err) {
+        console.error('SSE connect error:', err);
+      }
+    };
+
+    connectSSE();
+
+    return () => {
+      if (eventSource) eventSource.close();
+    };
+  }, [discordUser?.id, userCashedOut]);
 
   // Handle Mode Change
   const handleSelectFlightMode = (newMode: FlightMode) => {
@@ -970,30 +1065,49 @@ export default function App() {
     }, 3800);
   };
 
-  // Place Bet
-  const handlePlaceBet = (amount: number) => {
+  // Place Bet via Server API
+  const handlePlaceBet = async (amount: number) => {
     if (amount <= 0 || amount > balance) return;
     sounds.playClick();
-    setBalance(prev => prev - amount);
     setUserBet(amount);
 
-    setStats(prev => ({
-      ...prev,
-      totalWagered: prev.totalWagered + amount,
-    }));
+    const userId = discordUser?.id || 'guest_user';
+    const username = discordUser ? (discordUser.globalName || discordUser.username) : 'Khách';
+    const avatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest';
 
-    // Add user into active players lobby list
-    const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn (Người Chơi)';
-    const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
-    const userPlayer: PlayerBet = {
-      id: 'current_user',
-      username: userDisplayName,
-      avatar: userAvatar,
-      betAmount: amount,
-      status: 'PENDING',
-      isCurrentUser: true,
-    };
-    setPlayers(prev => [userPlayer, ...prev.filter(p => !p.isCurrentUser)]);
+    try {
+      const res = await fetch('/api/game/bet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          username,
+          avatar,
+          betAmount: amount,
+          targetMultiplier: autoCashoutEnabled ? autoCashoutTarget : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Đặt cược thất bại.');
+        setUserBet(0);
+        return;
+      }
+
+      if (typeof data.newBalance === 'number') {
+        setBalance(data.newBalance);
+      } else {
+        setBalance(prev => prev - amount);
+      }
+
+      setStats(prev => ({
+        ...prev,
+        totalWagered: prev.totalWagered + amount,
+      }));
+    } catch (err) {
+      console.error('Bet API error:', err);
+    }
   };
 
   // Cancel Bet during COUNTDOWN
@@ -1001,17 +1115,63 @@ export default function App() {
     if (userBet <= 0 || phase !== 'COUNTDOWN') return;
     sounds.playClick();
     setBalance(prev => prev + userBet);
-    setStats(prev => ({
-      ...prev,
-      totalWagered: prev.totalWagered - userBet,
-    }));
     setUserBet(0);
-    setPlayers(prev => prev.filter(p => !p.isCurrentUser));
   };
 
-  // Manual Cashout button click
-  const handleCashoutClick = () => {
-    executeUserCashout(multiplier);
+  // Manual Cashout button click via Server API
+  const handleCashoutClick = async () => {
+    if (userCashedOut || phase !== 'FLYING') return;
+
+    const userId = discordUser?.id || 'guest_user';
+
+    try {
+      const res = await fetch('/api/game/cashout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) return;
+
+      sounds.playCashoutWin();
+      setUserCashedOut(true);
+      setUserCashoutMultiplier(data.cashoutMultiplier);
+
+      if (typeof data.newBalance === 'number') {
+        setBalance(data.newBalance);
+      } else {
+        setBalance(prev => prev + data.winAmount);
+      }
+
+      const netProfit = data.winAmount - userBet;
+      setStats(prev => ({
+        ...prev,
+        totalGames: prev.totalGames + 1,
+        wins: prev.wins + 1,
+        totalProfit: prev.totalProfit + netProfit,
+        highestMultiplier: Math.max(prev.highestMultiplier, data.cashoutMultiplier),
+      }));
+
+      // Post to chat
+      const stage = getAltitudeStage(data.cashoutMultiplier);
+      const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
+      const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
+      setMessages(prev => [
+        ...prev.slice(-30),
+        {
+          id: Date.now().toString(),
+          user: userDisplayName,
+          avatar: userAvatar,
+          text: `Đã chốt lời an toàn tại ${data.cashoutMultiplier.toFixed(2)}x [${stage.badge}] (+${data.winAmount.toLocaleString('vi-VN')} Xu)! 🤑🎉`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          badge: discordUser ? 'DISCORD' : 'VIP',
+          isSystem: true,
+        },
+      ]);
+    } catch (err) {
+      console.error('Cashout API error:', err);
+    }
   };
 
   // Free Faucet replenishment
