@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import { createHash, randomBytes } from 'node:crypto';
 
 dotenv.config();
 
@@ -61,11 +62,11 @@ async function startServer() {
 
   // --- GLOBAL SERVER GAME STATE ENGINE ---
   function serverSha256(message: string): string {
-    return crypto.createHash('sha256').update(message).digest('hex');
+    return createHash('sha256').update(message).digest('hex');
   }
 
   function serverGenerateSeed(): string {
-    return crypto.randomBytes(16).toString('hex');
+    return randomBytes(16).toString('hex');
   }
 
   function serverCalculateMultiplier(seed: string): number {
