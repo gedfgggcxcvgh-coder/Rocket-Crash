@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Discord - Đăng nhập & Ủy Quyền Tài Khoản</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'gg sans', 'Noto Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+    body { background-color: #1e1f22; color: #f2f3f5; display: flex; items-align: center; justify-content: center; min-height: 100vh; padding: 20px; }
+    .auth-card { background-color: #2b2d31; width: 100%; max-width: 480px; border-radius: 12px; border: 1px solid #35363c; box-shadow: 0 12px 32px rgba(0,0,0,0.5); overflow: hidden; }
+    .header { background: linear-gradient(135deg, #5865f2, #4752c4); padding: 24px 28px; text-align: center; position: relative; }
+    .discord-logo { width: 42px; height: 42px; fill: white; margin-bottom: 10px; }
+    .title { font-size: 20px; font-weight: 800; color: white; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: rgba(255,255,255,0.85); }
+    .body { padding: 24px 28px; }
+    .scope-box { background-color: #111214; border-radius: 8px; padding: 16px; margin-bottom: 20px; border: 1px solid #232428; }
+    .scope-title { text-transform: uppercase; font-size: 11px; font-weight: 700; color: #949ba4; margin-bottom: 12px; letter-spacing: 0.5px; }
+    .scope-item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: #dbdee1; margin-bottom: 10px; }
+    .scope-item:last-child { margin-bottom: 0; }
+    .check-icon { width: 18px; height: 18px; background: #23a55a; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 11px; color: white; shrink: 0; }
+    
+    .form-group { margin-bottom: 16px; }
+    .label { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #b5bac1; margin-bottom: 8px; display: block; letter-spacing: 0.5px; }
+    .input { width: 100%; background-color: #1e1f22; border: 1px solid #35363c; border-radius: 4px; padding: 10px 12px; font-size: 14px; color: white; outline: none; transition: border-color 0.2s; }
+    .input:focus { border-color: #5865f2; }
+    
+    .avatar-grid { display: flex; gap: 10px; margin-top: 8px; }
+    .avatar-opt { width: 44px; height: 44px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: transform 0.2s, border-color 0.2s; object-fit: cover; }
+    .avatar-opt:hover { transform: scale(1.08); }
+    .avatar-opt.selected { border-color: #5865f2; box-shadow: 0 0 10px rgba(88,101,242,0.5); }
+
+    .footer { padding: 16px 28px 24px; display: flex; justify-content: flex-end; gap: 12px; background-color: #2b2d31; border-top: 1px solid #232428; }
+    .btn-cancel { background: transparent; border: none; color: #f2f3f5; font-size: 14px; font-weight: 600; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+    .btn-cancel:hover { text-decoration: underline; }
+    .btn-authorize { background-color: #5865f2; border: none; color: white; font-size: 14px; font-weight: 600; padding: 10px 24px; border-radius: 4px; cursor: pointer; transition: background-color 0.2s; }
+    .btn-authorize:hover { background-color: #4752c4; }
+  </style>
+</head>
+<body>
+  <div class="auth-card">
+    <div class="header">
+      <svg class="discord-logo" viewBox="0 0 24 24">
+        <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+      </svg>
+      <div class="title">ỦY QUYỀN TÀI KHOẢN DISCORD</div>
+      <div class="subtitle">Ứng dụng Rocket Crash muốn kết nối với tài khoản Discord của bạn</div>
+    </div>
+
+    <div class="body">
+      <div class="scope-box">
+        <div class="scope-title">Ứng dụng này sẽ có quyền:</div>
+        <div class="scope-item">
+          <div class="check-icon">✓</div>
+          <span>Truy cập tên người dùng, avatar và danh tính Discord</span>
+        </div>
+        <div class="scope-item">
+          <div class="check-icon">✓</div>
+          <span>Đồng bộ và lưu trữ số dư ví, lịch sử cược theo Discord ID</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="label">Tên Discord của bạn</label>
+        <input type="text" id="username" class="input" value="GamerDiscord" placeholder="Nhập tên Discord...">
+      </div>
+
+      <div class="form-group">
+        <label class="label">Email liên kết (Tùy chọn)</label>
+        <input type="email" id="email" class="input" value="user@discord.gg" placeholder="email@discord.gg">
+      </div>
+
+      <div class="form-group">
+        <label class="label">Chọn Avatar Discord</label>
+        <div class="avatar-grid" id="avatarGrid">
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=DiscordUser1&backgroundColor=5865f2" class="avatar-opt selected" onclick="selectAvatar(this)">
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=ProGamer&backgroundColor=10b981" class="avatar-opt" onclick="selectAvatar(this)">
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=SpacePilot&backgroundColor=a855f7" class="avatar-opt" onclick="selectAvatar(this)">
+          <img src="https://api.dicebear.com/7.x/bottts/svg?seed=RocketVIP&backgroundColor=f59e0b" class="avatar-opt" onclick="selectAvatar(this)">
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      <button class="btn-cancel" onclick="window.close()">Hủy Bỏ</button>
+      <button class="btn-authorize" onclick="authorizeDiscord()">Phê Duyệt (Authorize)</button>
+    </div>
+  </div>
+
+  <script>
+    let selectedAvatarUrl = 'https://api.dicebear.com/7.x/bottts/svg?seed=DiscordUser1&backgroundColor=5865f2';
+
+    function selectAvatar(el) {
+      document.querySelectorAll('.avatar-opt').forEach(a => a.classList.remove('selected'));
+      el.classList.add('selected');
+      selectedAvatarUrl = el.src;
+    }
+
+    function authorizeDiscord() {
+      const username = document.getElementById('username').value.trim() || 'GamerDiscord';
+      const email = document.getElementById('email').value.trim() || `${username.toLowerCase()}@discord.com`;
+      const discordId = Math.floor(100000000000000000 + Math.random() * 900000000000000000).toString();
+
+      const userProfile = {
+        id: discordId,
+        username: username,
+        globalName: username,
+        discriminator: '0',
+        avatar: selectedAvatarUrl,
+        email: email,
+        bannerColor: '#5865F2'
+      };
+
+      if (window.opener) {
+        window.opener.postMessage({
+          type: 'OAUTH_AUTH_SUCCESS',
+          provider: 'discord',
+          user: userProfile
+        }, '*');
+        window.close();
+      } else {
+        alert('Đã phê duyệt tài khoản Discord: ' + username);
+      }
+    }
+  </script>
+</body>
+</html>
