@@ -15,7 +15,22 @@ async function startServer() {
   const app = express();
   const PORT = process.env.PORT || 3000;
 
+  // Enable trust proxy for Render / Vercel cloud HTTPS proxies
+  app.set('trust proxy', 1);
+
   app.use(express.json());
+
+  // Helper to determine accurate public base URL
+  const getAppUrl = (req: express.Request) => {
+    if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+    const host = req.get('host') || `localhost:${PORT}`;
+    const isHttps =
+      req.protocol === 'https' ||
+      req.headers['x-forwarded-proto'] === 'https' ||
+      host.includes('.onrender.com') ||
+      host.includes('.vercel.app');
+    return `${isHttps ? 'https' : 'http'}://${host}`;
+  };
 
   // Load persisted Discord OAuth configuration if available
   let discordAuthConfig = {
@@ -61,9 +76,7 @@ async function startServer() {
     const clientId = customClientId || discordAuthConfig.clientId || process.env.DISCORD_CLIENT_ID || '1553795964215627836';
     
     // Construct exact redirect URI
-    const host = req.get('host') || `localhost:${PORT}`;
-    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-    const appUrl = process.env.APP_URL || `${protocol}://${host}`;
+    const appUrl = getAppUrl(req);
     const redirectUri = `${appUrl}/api/auth/discord/callback`;
 
     if (!clientId) {
@@ -124,9 +137,7 @@ async function startServer() {
     const clientId = discordAuthConfig.clientId || process.env.DISCORD_CLIENT_ID || '1553795964215627836';
     const clientSecret = discordAuthConfig.clientSecret || process.env.DISCORD_CLIENT_SECRET || '';
     
-    const host = req.get('host') || `localhost:${PORT}`;
-    const protocol = req.protocol === 'https' || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
-    const appUrl = process.env.APP_URL || `${protocol}://${host}`;
+    const appUrl = getAppUrl(req);
     const redirectUri = `${appUrl}/api/auth/discord/callback`;
 
     try {
@@ -150,7 +161,9 @@ async function startServer() {
       const tokenData = await tokenRes.json();
 
       if (!tokenRes.ok) {
-        throw new Error(tokenData.error_description || tokenData.error || 'Lỗi trao đổi mã xác thực với Discord API');
+        console.error('Discord Token Exchange Error:', tokenData);
+        const detailMsg = tokenData.error_description || tokenData.error || JSON.stringify(tokenData);
+        throw new Error(`Discord API Báo Lỗi: ${detailMsg}`);
       }
 
       // 2. Fetch official user profile from Discord API @me endpoint
