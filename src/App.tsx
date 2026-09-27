@@ -29,6 +29,12 @@ const BOT_NAMES = [
   'AnhBa_BaoSàn', 'Tùng_ChốtNon', 'Minh_TayVàng'
 ];
 
+const TAB_ID = typeof window !== 'undefined' ? (Math.random().toString(36).substring(2) + Date.now().toString(36)) : 'default';
+
+const syncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('rocket_crash_cross_tab_sync')
+  : null;
+
 const INITIAL_CHATS: ChatMessage[] = [
   { id: '1', user: 'Huy_CháyTúi', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Huy', text: 'Má ván trước vừa vào định gồng x50 thì toang, cay dái thật', time: '14:26' },
   { id: '2', user: 'Tuấn_TayTo', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan', text: 'Non thì chịu đi chú em, vừa làm phát 50k xu ấm cật haha', time: '14:27' },
@@ -59,8 +65,8 @@ export default function App() {
   const [balance, setBalance] = useState<number>(() => {
     const savedDiscord = getSavedDiscordUser();
     if (savedDiscord) return savedDiscord.balance;
-    const saved = localStorage.getItem('rocket_crash_balance');
-    return saved ? parseInt(saved, 10) : INITIAL_BALANCE;
+    const savedGuest = localStorage.getItem('rocket_crash_guest_balance');
+    return savedGuest ? parseInt(savedGuest, 10) : INITIAL_BALANCE;
   });
   const [userBet, setUserBet] = useState<number>(0);
   const [userCashedOut, setUserCashedOut] = useState<boolean>(false);
@@ -87,9 +93,9 @@ export default function App() {
         totalWagered: savedDiscord.totalWagered,
       };
     }
-    const saved = localStorage.getItem('rocket_crash_stats');
-    if (saved) {
-      try { return JSON.parse(saved); } catch {}
+    const savedGuest = localStorage.getItem('rocket_crash_guest_stats');
+    if (savedGuest) {
+      try { return JSON.parse(savedGuest); } catch {}
     }
     return {
       balance: INITIAL_BALANCE,
@@ -117,6 +123,109 @@ export default function App() {
         })
         .catch(() => {});
     }
+  }, [discordUser?.id]);
+
+  // Real-time Cross-Tab Syncing (BroadcastChannel + Storage Event + Focus Event)
+  useEffect(() => {
+    if (!syncChannel) return;
+
+    const handleSyncMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (!data || data.tabId === TAB_ID || data.type !== 'SYNC_ACCOUNT_STATE') return;
+
+      if (data.discordUser !== undefined) {
+        setDiscordUser(data.discordUser);
+      }
+
+      if (typeof data.balance === 'number') {
+        setBalance(data.balance);
+      }
+
+      if (data.stats) {
+        setStats(data.stats);
+      }
+    };
+
+    syncChannel.addEventListener('message', handleSyncMessage);
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'rocket_crash_discord_user') {
+        const newUser = getSavedDiscordUser();
+        setDiscordUser(newUser);
+        if (newUser) {
+          setBalance(newUser.balance);
+        }
+      } else if (e.key === 'rocket_crash_guest_balance') {
+        if (!getSavedDiscordUser()) {
+          const val = e.newValue ? parseInt(e.newValue, 10) : INITIAL_BALANCE;
+          setBalance(val);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorage);
+
+    const handleFocus = () => {
+      const currentDiscord = getSavedDiscordUser();
+      if (currentDiscord && currentDiscord.id) {
+        fetch(`/api/user/${currentDiscord.id}`)
+          .then(res => (res.ok ? res.json() : null))
+          .then(serverData => {
+            if (serverData && typeof serverData.balance === 'number') {
+              setBalance(serverData.balance);
+              if (serverData.stats) {
+                setStats(prev => ({ ...prev, ...serverData.stats }));
+              }
+            }
+          })
+          .catch(() => {});
+      } else {
+        const savedGuest = localStorage.getItem('rocket_crash_guest_balance');
+        if (savedGuest) setBalance(parseInt(savedGuest, 10));
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      syncChannel.removeEventListener('message', handleSyncMessage);
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  // Broadcast local account balance/state changes to all other open tabs in real-time
+  useEffect(() => {
+    if (syncChannel) {
+      syncChannel.postMessage({
+        type: 'SYNC_ACCOUNT_STATE',
+        tabId: TAB_ID,
+        balance,
+        stats,
+        discordUser,
+      });
+    }
+  }, [balance, stats, discordUser]);
+
+  // Periodically poll central server for account updates if logged into Discord
+  useEffect(() => {
+    if (!discordUser?.id) return;
+
+    const interval = setInterval(() => {
+      fetch(`/api/user/${discordUser.id}`)
+        .then(res => (res.ok ? res.json() : null))
+        .then(serverData => {
+          if (serverData && typeof serverData.balance === 'number') {
+            setBalance(prev => (prev !== serverData.balance ? serverData.balance : prev));
+            if (serverData.stats) {
+              setStats(prev => ({ ...prev, ...serverData.stats }));
+            }
+          }
+        })
+        .catch(() => {});
+    }, 3000);
+
+    return () => clearInterval(interval);
   }, [discordUser?.id]);
 
   // Automatically sync gameplay data to Discord account
@@ -175,13 +284,17 @@ export default function App() {
 
   // Persist balance
   useEffect(() => {
-    localStorage.setItem('rocket_crash_balance', balance.toString());
-  }, [balance]);
+    if (!discordUser) {
+      localStorage.setItem('rocket_crash_guest_balance', balance.toString());
+    }
+  }, [balance, discordUser]);
 
   // Persist stats
   useEffect(() => {
-    localStorage.setItem('rocket_crash_stats', JSON.stringify(stats));
-  }, [stats]);
+    if (!discordUser) {
+      localStorage.setItem('rocket_crash_guest_stats', JSON.stringify(stats));
+    }
+  }, [stats, discordUser]);
 
   // Initialize a new round
   const initNewRound = useCallback(async (modeToUse?: FlightMode) => {
@@ -931,6 +1044,56 @@ export default function App() {
     ]);
   };
 
+  // Handle Discord Account login & logout state transitions
+  const handleUpdateDiscordUser = (newUser: DiscordUser | null) => {
+    setDiscordUser(newUser);
+    if (!newUser) {
+      // Disconnected / Logged out: Restore separate Guest account balance and stats!
+      const savedGuestBalance = localStorage.getItem('rocket_crash_guest_balance');
+      const guestBalance = savedGuestBalance ? parseInt(savedGuestBalance, 10) : INITIAL_BALANCE;
+      setBalance(guestBalance);
+
+      const savedGuestStats = localStorage.getItem('rocket_crash_guest_stats');
+      if (savedGuestStats) {
+        try {
+          setStats(JSON.parse(savedGuestStats));
+        } catch {
+          setStats({
+            balance: guestBalance,
+            totalGames: 0,
+            wins: 0,
+            losses: 0,
+            totalProfit: 0,
+            highestMultiplier: 0,
+            totalWagered: 0,
+          });
+        }
+      } else {
+        setStats({
+          balance: guestBalance,
+          totalGames: 0,
+          wins: 0,
+          losses: 0,
+          totalProfit: 0,
+          highestMultiplier: 0,
+          totalWagered: 0,
+        });
+      }
+    } else {
+      // Logged in: Restore this specific Discord user's balance and stats!
+      setBalance(newUser.balance);
+      setStats({
+        balance: newUser.balance,
+        totalGames: newUser.totalGames,
+        wins: newUser.wins,
+        losses: newUser.losses,
+        totalProfit: newUser.totalProfit,
+        highestMultiplier: newUser.highestMultiplier,
+        totalWagered: newUser.totalWagered,
+      });
+    }
+  };
+
   // Reset user stats
   const handleResetStats = () => {
     setStats({
@@ -1116,7 +1279,7 @@ export default function App() {
         isOpen={showDiscordModal}
         onClose={() => setShowDiscordModal(false)}
         discordUser={discordUser}
-        onUpdateDiscordUser={setDiscordUser}
+        onUpdateDiscordUser={handleUpdateDiscordUser}
         userBalance={balance}
         userStats={stats}
         onApplyBalanceAndStats={(newBalance, newStats) => {

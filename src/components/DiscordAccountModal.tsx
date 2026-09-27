@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, Check, Copy, ExternalLink, RefreshCw, LogOut, Award,
-  Sparkles, Gift, Cloud, Database, Terminal, Send
+  Sparkles, Gift, Terminal, Send
 } from 'lucide-react';
 import { DiscordUser } from '../types/discord';
 import { UserStats } from '../types/game';
@@ -33,10 +33,9 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
   userStats,
   onApplyBalanceAndStats,
 }) => {
-  const [activeTab, setActiveTab] = useState<'profile' | 'sync' | 'bot'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'bot'>('profile');
   const [discordInput, setDiscordInput] = useState('');
   const [syncStatus, setSyncStatus] = useState<string | null>(null);
-  const [copiedSyncKey, setCopiedSyncKey] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [webhookStatus, setWebhookStatus] = useState<string | null>(null);
 
@@ -262,18 +261,6 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
           >
             <Award className="w-4 h-4" />
             <span>Tài Khoản & Hồ Sơ</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('sync')}
-            className={`py-3 px-4 text-xs font-bold border-b-2 transition-colors flex items-center gap-2 ${
-              activeTab === 'sync'
-                ? 'border-[#5865F2] text-[#5865F2]'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Cloud className="w-4 h-4" />
-            <span>Đồng Bộ Cloud ({userBalance.toLocaleString('vi-VN')} Xu)</span>
           </button>
 
           <button
@@ -585,105 +572,6 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
                 </div>
               )}
             </>
-          )}
-
-          {activeTab === 'sync' && (
-            /* CLOUD DATA & SYNC TAB */
-            <div className="space-y-5">
-              <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Database className="w-4 h-4 text-emerald-400" />
-                    Trạng Thái Dữ Liệu Đồng Bộ
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {discordUser ? `Đã liên kết với tài khoản Discord ID: ${discordUser.id}` : 'Chưa liên kết tài khoản Discord'}
-                  </p>
-                </div>
-
-                {discordUser && (
-                  <button
-                    type="button"
-                    onClick={handleManualSync}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
-                  >
-                    <RefreshCw className="w-4 h-4" />
-                    <span>LƯU CLOUD NGAY</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Data Table */}
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col">
-                  <span className="text-[11px] text-slate-400">Số dư ví trên Cloud</span>
-                  <span className="text-xl font-bold font-mono-numbers text-amber-400 mt-1">
-                    {userBalance.toLocaleString('vi-VN')} Xu
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col">
-                  <span className="text-[11px] text-slate-400">Kỷ Lục Bay Cao Nhất</span>
-                  <span className="text-xl font-bold font-mono-numbers text-emerald-400 mt-1">
-                    {userStats.highestMultiplier.toFixed(2)}x
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col">
-                  <span className="text-[11px] text-slate-400">Tổng Ván Cược</span>
-                  <span className="text-xl font-bold font-mono-numbers text-slate-200 mt-1">
-                    {userStats.totalGames} ván
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col">
-                  <span className="text-[11px] text-slate-400">Tổng Tiền Đã Cược</span>
-                  <span className="text-lg font-bold font-mono-numbers text-indigo-400 mt-1">
-                    {userStats.totalWagered.toLocaleString('vi-VN')} Xu
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col">
-                  <span className="text-[11px] text-slate-400">Số Ván Thắng (Chốt Lời)</span>
-                  <span className="text-lg font-bold font-mono-numbers text-emerald-400 mt-1">
-                    {userStats.wins} ván ({userStats.totalGames > 0 ? Math.round((userStats.wins / userStats.totalGames) * 100) : 0}%)
-                  </span>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex flex-col">
-                  <span className="text-[11px] text-slate-400">Lợi Nhuận Ròng</span>
-                  <span className={`text-lg font-bold font-mono-numbers mt-1 ${userStats.totalProfit >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    {userStats.totalProfit >= 0 ? '+' : ''}{userStats.totalProfit.toLocaleString('vi-VN')} Xu
-                  </span>
-                </div>
-              </div>
-
-              {/* Cloud Sync Backup Key */}
-              {discordUser && (
-                <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-slate-200">Mã Khôi Phục Dữ Liệu (Backup Cloud Key)</span>
-                    <span className="text-slate-500 text-[11px]">Dùng để khôi phục tài khoản trên trình duyệt khác</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={btoa(`${discordUser.id}:${userBalance}:${discordUser.username}`)}
-                      className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-slate-300 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCopySyncKey}
-                      className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      {copiedSyncKey ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedSyncKey ? 'ĐÃ SAO CHÉP' : 'SAO CHÉP'}</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
           )}
 
           {activeTab === 'bot' && (
