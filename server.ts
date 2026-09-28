@@ -15,7 +15,7 @@ const USER_DB_FILE_PATH = path.join(__dirname, 'user-database.json');
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   // Enable trust proxy for Render / Vercel cloud HTTPS proxies
   app.set('trust proxy', 1);
@@ -837,22 +837,31 @@ async function startServer() {
     res.json(userData);
   });
 
+  // Health check endpoint for Cloud Run and load balancers
+  app.get(['/healthz', '/api/health'], (req, res) => {
+    res.status(200).send('OK');
+  });
+
   // Vite Dev Server middleware or production static serving
-  if (process.env.NODE_ENV !== 'production') {
+  const distPath = path.join(__dirname, 'dist');
+  const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isProduction = process.env.NODE_ENV === 'production' || hasBuiltDist;
+
+  if (isProduction) {
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
     });
     app.use(vite.middlewares);
-  } else {
-    app.use(express.static(path.join(__dirname, 'dist')));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-    });
   }
 
-  app.listen(PORT, () => {
-    console.log(`🚀 Rocket Crash Server running at http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Rocket Crash Server running at http://0.0.0.0:${PORT}`);
   });
 }
 

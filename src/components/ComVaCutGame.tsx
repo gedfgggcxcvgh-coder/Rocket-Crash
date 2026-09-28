@@ -837,7 +837,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                     <h3 className={`${isLandscapeActive ? 'text-sm sm:text-base' : 'text-base sm:text-2xl'} font-black text-amber-300 uppercase leading-none`}>
                       CƠM
                     </h3>
-                    <span className="text-[9px] sm:text-xs text-amber-400 font-bold">11 - 17</span>
+                    <span className="text-[9px] sm:text-xs text-amber-400 font-black">11 - 17 Điểm</span>
                   </div>
                 </div>
                 <span className="text-[8px] sm:text-xs bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded font-black">
@@ -937,7 +937,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                 </div>
               </div>
 
-              {/* The Ceramic Lid (Bát Úp) - Interactive Dragging */}
+              {/* The Ceramic Lid (Bát Úp ĐẶC KÍN 100% KHÔNG TRONG SUỐT) - Interactive Dragging */}
               {!isLidFullyOpen && (
                 <div
                   onMouseDown={handleTouchOrMouseDown}
@@ -948,22 +948,40 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                     }`,
                     transition: isDraggingLid ? 'none' : 'transform 0.3s ease-out',
                   }}
-                  className={`absolute inset-0 rounded-full bg-gradient-to-br from-slate-800 via-slate-900 to-amber-950 border-2 sm:border-4 border-amber-400 shadow-2xl flex flex-col items-center justify-center cursor-grab active:cursor-grabbing z-30 select-none ${
-                    phase === 'OPENING' ? 'ring-2 ring-amber-400/60 animate-pulse' : ''
+                  className={`absolute inset-0 rounded-full opacity-100 bg-[#150f0b] border-3 sm:border-5 border-amber-400 shadow-[0_15px_35px_rgba(0,0,0,0.95)] flex flex-col items-center justify-center cursor-grab active:cursor-grabbing z-30 select-none overflow-hidden ${
+                    phase === 'OPENING'
+                      ? 'ring-4 ring-amber-400/90 shadow-[0_0_35px_rgba(245,158,11,0.7)]'
+                      : ''
                   }`}
                 >
-                  <div className={`${isLandscapeActive ? 'w-5 h-5' : 'w-8 h-8 sm:w-11 sm:h-11'} rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 border border-white/60 shadow-md flex items-center justify-center mb-0.5`}>
-                    <span className={isLandscapeActive ? 'text-xs' : 'text-sm sm:text-lg'}>🍚</span>
+                  {/* Layer gốm sứ hoàng gia đặc kín 100% tuyệt đối không xuyên thấu */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#2a1d15] via-[#1a120c] to-[#0a0604] rounded-full opacity-100" />
+                  
+                  {/* Vòng tròn đồng tâm hoa văn men gốm Bát Tràng */}
+                  <div className="absolute inset-2 sm:inset-3 rounded-full border border-amber-500/30 pointer-events-none" />
+                  <div className="absolute inset-4 sm:inset-6 rounded-full border border-amber-500/20 pointer-events-none" />
+                  <div className="absolute inset-6 sm:inset-9 rounded-full border border-amber-500/15 pointer-events-none" />
+
+                  {/* Núm Bát Vàng Ròng 3D (Golden Knob) */}
+                  <div className="relative z-10 flex flex-col items-center justify-center">
+                    <div className={`${
+                      isLandscapeActive ? 'w-6 h-6' : 'w-10 h-10 sm:w-13 sm:h-13'
+                    } rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-300 border-2 border-amber-200 shadow-[0_4px_15px_rgba(0,0,0,0.8)] flex items-center justify-center mb-1 group-active:scale-95 transition-transform`}>
+                      <span className={isLandscapeActive ? 'text-xs' : 'text-base sm:text-xl drop-shadow'}>🖐️</span>
+                    </div>
+                    <span className={`text-amber-300 font-black tracking-wider uppercase text-center px-1 drop-shadow-md ${
+                      isLandscapeActive ? 'text-[8px]' : 'text-[10px] sm:text-xs'
+                    }`}>
+                      {phase === 'SHAKING'
+                        ? 'Đang Xóc...'
+                        : 'KÉO ĐỂ MỞ BÁT'}
+                    </span>
+                    {!isLandscapeActive && (
+                      <span className="text-[8px] text-amber-400/90 font-bold animate-pulse mt-0.5">
+                        ↔ Kéo mép bát để hé lộ
+                      </span>
+                    )}
                   </div>
-                  <span className={`text-amber-300 font-black tracking-wider uppercase text-center px-1 ${
-                    isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-xs'
-                  }`}>
-                    {phase === 'SHAKING'
-                      ? 'Đang Xóc...'
-                      : phase === 'OPENING'
-                      ? '👆 NẶN BÁT'
-                      : 'Bát Rồng'}
-                  </span>
                 </div>
               )}
             </div>
@@ -1023,7 +1041,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                     <h3 className={`${isLandscapeActive ? 'text-sm sm:text-base' : 'text-base sm:text-2xl'} font-black text-yellow-500 uppercase leading-none`}>
                       CỨT
                     </h3>
-                    <span className="text-[9px] sm:text-xs text-yellow-600 font-bold">4 - 10</span>
+                    <span className="text-[9px] sm:text-xs text-yellow-500 font-black">4 - 10 Điểm</span>
                   </div>
                 </div>
                 <span className="text-[8px] sm:text-xs bg-yellow-600/20 text-yellow-400 px-1 py-0.5 rounded font-black">
@@ -1065,68 +1083,100 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           </div>
         </div>
 
-        {/* 3. CỬA PHỤ NGANG DƯỚI BÁT (BÃO & KÈO ĐẶC BIỆT) */}
+        {/* 3. CỬA PHỤ NGANG DƯỚI BÁT (BÃO & KÈO ĐẶC BIỆT CÓ ĐẦY ĐỦ SỐ ĐIỂM) */}
         <div className={`w-full grid grid-cols-4 border-t border-slate-800/80 shrink-0 ${
           isLandscapeActive ? 'gap-1 mt-0.5 pt-0.5' : 'gap-1.5 sm:gap-2 z-10 mt-2.5 pt-2'
         }`}>
+          {/* BÃO CƠM */}
           <div
             onClick={() => handlePlaceBet('BAO_COM')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center ${
-              isLandscapeActive ? 'p-0.5' : 'p-1.5'
+            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+              isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.BAO_COM > 0
-                ? 'bg-amber-950/80 border-amber-400 shadow-md'
-                : 'bg-slate-900/60 border-slate-800'
+                ? 'bg-amber-950/80 border-amber-400 shadow-md ring-1 ring-amber-400/50'
+                : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40'
             }`}
           >
-            <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🍚🍚🍚</span>
-            <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Bão Cơm</span>
-            <span className="text-[7px] sm:text-[8px] text-amber-400 font-bold">x30</span>
+            <div className="flex flex-col items-center">
+              <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🍚🍚🍚</span>
+              <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Bão Cơm</span>
+              <span className="text-[7px] sm:text-[8px] text-amber-400 font-black">Ăn x30</span>
+            </div>
+            <div className={`mt-0.5 px-1 py-0.2 rounded bg-amber-500/15 border border-amber-400/30 text-amber-300 font-mono font-bold leading-tight ${
+              isLandscapeActive ? 'text-[6px]' : 'text-[8px] sm:text-[9px]'
+            }`}>
+              444 • 555 • 666
+            </div>
           </div>
 
+          {/* BÃO CỨT */}
           <div
             onClick={() => handlePlaceBet('BAO_CUT')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center ${
-              isLandscapeActive ? 'p-0.5' : 'p-1.5'
+            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+              isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.BAO_CUT > 0
-                ? 'bg-yellow-950/80 border-yellow-600 shadow-md'
-                : 'bg-slate-900/60 border-slate-800'
+                ? 'bg-yellow-950/80 border-yellow-600 shadow-md ring-1 ring-yellow-500/50'
+                : 'bg-slate-900/60 border-slate-800 hover:border-yellow-600/40'
             }`}
           >
-            <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>💩💩💩</span>
-            <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Bão Cứt</span>
-            <span className="text-[7px] sm:text-[8px] text-yellow-400 font-bold">x30</span>
+            <div className="flex flex-col items-center">
+              <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>💩💩💩</span>
+              <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Bão Cứt</span>
+              <span className="text-[7px] sm:text-[8px] text-yellow-400 font-black">Ăn x30</span>
+            </div>
+            <div className={`mt-0.5 px-1 py-0.2 rounded bg-yellow-500/15 border border-yellow-600/30 text-yellow-400 font-mono font-bold leading-tight ${
+              isLandscapeActive ? 'text-[6px]' : 'text-[8px] sm:text-[9px]'
+            }`}>
+              111 • 222 • 333
+            </div>
           </div>
 
+          {/* CƠM GÀ */}
           <div
             onClick={() => handlePlaceBet('COM_GA')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center ${
-              isLandscapeActive ? 'p-0.5' : 'p-1.5'
+            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+              isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.COM_GA > 0
-                ? 'bg-amber-950/80 border-amber-400 shadow-md'
-                : 'bg-slate-900/60 border-slate-800'
+                ? 'bg-amber-950/80 border-amber-400 shadow-md ring-1 ring-amber-400/50'
+                : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40'
             }`}
           >
-            <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🍗🍚</span>
-            <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Cơm Gà</span>
-            <span className="text-[7px] sm:text-[8px] text-amber-400 font-bold">x8</span>
+            <div className="flex flex-col items-center">
+              <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🍗🍚</span>
+              <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Cơm Gà</span>
+              <span className="text-[7px] sm:text-[8px] text-amber-400 font-black">Ăn x8</span>
+            </div>
+            <div className={`mt-0.5 px-1 py-0.2 rounded bg-amber-500/15 border border-amber-400/30 text-amber-300 font-mono font-bold leading-tight ${
+              isLandscapeActive ? 'text-[6px]' : 'text-[8px] sm:text-[9px]'
+            }`}>
+              13 - 14 điểm
+            </div>
           </div>
 
+          {/* CỨT RUỒI */}
           <div
             onClick={() => handlePlaceBet('CUT_RUOI')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center text-center ${
-              isLandscapeActive ? 'p-0.5' : 'p-1.5'
+            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+              isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.CUT_RUOI > 0
-                ? 'bg-yellow-950/80 border-yellow-600 shadow-md'
-                : 'bg-slate-900/60 border-slate-800'
+                ? 'bg-yellow-950/80 border-yellow-600 shadow-md ring-1 ring-yellow-500/50'
+                : 'bg-slate-900/60 border-slate-800 hover:border-yellow-600/40'
             }`}
           >
-            <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🪰💩</span>
-            <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Cứt Ruồi</span>
-            <span className="text-[7px] sm:text-[8px] text-yellow-400 font-bold">x8</span>
+            <div className="flex flex-col items-center">
+              <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🪰💩</span>
+              <span className={`font-black text-white ${isLandscapeActive ? 'text-[7px]' : 'text-[9px] sm:text-[10px]'}`}>Cứt Ruồi</span>
+              <span className="text-[7px] sm:text-[8px] text-yellow-400 font-black">Ăn x8</span>
+            </div>
+            <div className={`mt-0.5 px-1 py-0.2 rounded bg-yellow-500/15 border border-yellow-600/30 text-yellow-400 font-mono font-bold leading-tight ${
+              isLandscapeActive ? 'text-[6px]' : 'text-[8px] sm:text-[9px]'
+            }`}>
+              7 - 8 điểm
+            </div>
           </div>
         </div>
       </div>
@@ -1250,18 +1300,27 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               <p>
                 Trò chơi sử dụng <strong>3 viên xí ngầu xúc xắc</strong> điểm từ 1 đến 6:
               </p>
-              <ul className="list-disc pl-4 space-y-1">
+              <ul className="list-disc pl-4 space-y-1.5">
                 <li>
-                  <strong className="text-amber-400">CỬA CƠM (Tài):</strong> Tổng điểm 3 viên từ <strong>11 đến 17</strong>. Tỉ lệ ăn 1 : 1.98.
+                  <strong className="text-amber-400">🍚 CỬA CƠM:</strong> Tổng điểm 3 viên từ <strong>11 đến 17 Điểm</strong> (trừ các bộ Bão). Tỉ lệ ăn <strong>1 : 1.98</strong>.
                 </li>
                 <li>
-                  <strong className="text-yellow-500">CỬA CỨT (Xỉu):</strong> Tổng điểm 3 viên từ <strong>4 đến 10</strong>. Tỉ lệ ăn 1 : 1.98.
+                  <strong className="text-yellow-500">💩 CỬA CỨT:</strong> Tổng điểm 3 viên từ <strong>4 đến 10 Điểm</strong> (trừ các bộ Bão). Tỉ lệ ăn <strong>1 : 1.98</strong>.
                 </li>
                 <li>
-                  <strong className="text-purple-400">BÃO:</strong> 3 viên cùng điểm (ví dụ 1-1-1 hoặc 6-6-6), nhà cái ăn cả Cơm và Cứt, chỉ trả thưởng cho người đặt cửa Bão (x30 lần).
+                  <strong className="text-amber-300">🍚🍚🍚 BÃO CƠM:</strong> 3 viên cùng ra số lớn <strong>4-4-4, 5-5-5 hoặc 6-6-6</strong>. Tỉ lệ ăn <strong>x30 lần</strong>!
                 </li>
                 <li>
-                  <strong className="text-emerald-400">TÍNH NĂNG NẶN BÁT:</strong> Khi mở bát, bạn có thể rê chuột hoặc vuốt tay để kéo nắp bát hé lộ từng viên xúc xắc chuẩn casino!
+                  <strong className="text-yellow-400">💩💩💩 BÃO CỨT:</strong> 3 viên cùng ra số nhỏ <strong>1-1-1, 2-2-2 hoặc 3-3-3</strong>. Tỉ lệ ăn <strong>x30 lần</strong>!
+                </li>
+                <li>
+                  <strong className="text-orange-400">🍗 CƠM GÀ:</strong> Tổng điểm 3 viên đúng <strong>13 hoặc 14 Điểm</strong>. Tỉ lệ ăn <strong>x8 lần</strong>!
+                </li>
+                <li>
+                  <strong className="text-lime-400">🪰 CỨT RUỒI:</strong> Tổng điểm 3 viên đúng <strong>7 hoặc 8 Điểm</strong>. Tỉ lệ ăn <strong>x8 lần</strong>!
+                </li>
+                <li>
+                  <strong className="text-emerald-400">TÍNH NĂNG NẶN BÁT:</strong> Giữ chuột hoặc vuốt ngón tay trên bát để kéo nắp mở dần từng viên xí ngầu hồi hộp kịch tính!
                 </li>
               </ul>
               <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-[11px]">
