@@ -711,30 +711,34 @@ async function startServer() {
     // Dual-mode Callback: Process Implicit Token directly in Browser (Bypasses server IP rate-limits 100%)
     res.send(`
       <!DOCTYPE html>
-      <html>
+      <html lang="vi">
         <head>
-          <title>Xác Thực Discord...</title>
+          <title>Xác Thực Discord Thành Công</title>
           <meta charset="utf-8" />
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
           <style>
-            body { background: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-            .card { background: #1e293b; padding: 2.5rem; border-radius: 1rem; text-align: center; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-width: 420px; }
-            .spinner { width: 42px; height: 42px; border: 3px solid #334155; border-top-color: #5865f2; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.2rem; }
+            * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
+            body { background: #090d16; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
+            .card { background: #131b2e; padding: 2rem 1.5rem; border-radius: 1.5rem; text-align: center; border: 1px solid #1e293b; box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-width: 400px; width: 100%; }
+            .spinner { width: 44px; height: 44px; border: 3px solid #1e293b; border-top-color: #5865f2; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1.2rem; }
             @keyframes spin { to { transform: rotate(360deg); } }
-            .avatar { width: 72px; height: 72px; border-radius: 50%; border: 3px solid #22c55e; margin: 0 auto 1rem; }
+            .avatar { width: 76px; height: 76px; border-radius: 50%; border: 3px solid #22c55e; margin: 0 auto 0.8rem; box-shadow: 0 0 20px rgba(34,197,94,0.4); object-fit: cover; }
+            .badge { display: inline-block; background: rgba(88,101,242,0.2); border: 1px solid rgba(88,101,242,0.5); color: #818cf8; font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 9999px; text-transform: uppercase; margin-bottom: 0.8rem; }
+            .btn-action { display: block; width: 100%; margin-top: 1.2rem; padding: 12px 18px; border-radius: 12px; background: linear-gradient(135deg, #10b981, #059669); color: #ffffff; text-decoration: none; font-weight: 900; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px; border: none; cursor: pointer; box-shadow: 0 8px 20px rgba(16,185,129,0.35); transition: transform 0.15s; }
+            .btn-action:active { transform: scale(0.97); }
           </style>
         </head>
         <body>
           <div class="card" id="app-box">
             <div class="spinner"></div>
-            <h3 style="margin:0;color:#5865f2;">Đang kết nối tài khoản Discord...</h3>
+            <h3 style="margin:0;color:#5865f2;font-size:16px;">Đang kết nối tài khoản Discord...</h3>
             <p style="color:#94a3b8;font-size:13px;margin-top:0.5rem;">Vui lòng chờ trong giây lát</p>
           </div>
           <script>
             async function handleDiscordAuth() {
               const hash = window.location.hash;
-              const search = window.location.search;
               
-              // 1. Client-Side Implicit Token Flow (Bypasses server IP rate limits 100%)
+              // 1. Client-Side Implicit Token Flow
               let token = null;
               if (hash && hash.includes('access_token')) {
                 const params = new URLSearchParams(hash.substring(1));
@@ -753,7 +757,19 @@ async function startServer() {
                     ? 'https://cdn.discordapp.com/avatars/' + discordUser.id + '/' + discordUser.avatar + '.png?size=256'
                     : 'https://cdn.discordapp.com/embed/avatars/' + (parseInt(discordUser.id) % 5) + '.png';
 
-                  const realUserProfile = {
+                  // Fetch server save or initialize user
+                  let serverSave = null;
+                  try {
+                    const checkRes = await fetch('/api/user/' + discordUser.id);
+                    if (checkRes.ok) serverSave = await checkRes.json();
+                  } catch(e) {}
+
+                  const userBalance = serverSave && typeof serverSave.balance === 'number' ? serverSave.balance : 500000;
+                  const stats = serverSave && serverSave.stats ? serverSave.stats : {
+                    totalGames: 0, wins: 0, losses: 0, totalProfit: 0, highestMultiplier: 0, totalWagered: 0
+                  };
+
+                  const fullDiscordUser = {
                     id: discordUser.id,
                     username: discordUser.username,
                     globalName: discordUser.global_name || discordUser.username,
@@ -761,38 +777,114 @@ async function startServer() {
                     avatar: avatarUrl,
                     email: discordUser.email || '',
                     bannerColor: discordUser.banner_color || '#5865F2',
+                    roles: ['VIP Phi Công', 'Tài Xỉu Master'],
+                    level: 1,
+                    xp: 0,
+                    linkedAt: Date.now(),
+                    lastSyncedAt: Date.now(),
+                    balance: userBalance,
+                    totalGames: stats.totalGames || 0,
+                    wins: stats.wins || 0,
+                    losses: stats.losses || 0,
+                    totalProfit: stats.totalProfit || 0,
+                    highestMultiplier: stats.highestMultiplier || 0,
+                    totalWagered: stats.totalWagered || 0,
+                    streakDays: 1,
+                    lastDailyClaim: Date.now(),
                   };
 
+                  // 1. Save directly to localStorage for instant persistence across tabs & reloads
+                  try {
+                    localStorage.setItem('rocket_crash_discord_user', JSON.stringify(fullDiscordUser));
+                    localStorage.setItem('rocket_crash_last_oauth_ts', Date.now().toString());
+                    window.dispatchEvent(new Event('storage'));
+                  } catch (e) {}
+
+                  // 2. Sync to central server database
+                  try {
+                    await fetch('/api/user/sync', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        discordId: fullDiscordUser.id,
+                        username: fullDiscordUser.globalName,
+                        avatar: fullDiscordUser.avatar,
+                        balance: fullDiscordUser.balance,
+                        stats: stats,
+                      })
+                    });
+                  } catch(e) {}
+
+                  // 3. Notify all open tabs via BroadcastChannel
+                  try {
+                    if ('BroadcastChannel' in window) {
+                      const syncChannel = new BroadcastChannel('rocket_crash_cross_tab_sync');
+                      syncChannel.postMessage({
+                        type: 'SYNC_ACCOUNT_STATE',
+                        discordUser: fullDiscordUser,
+                        tabId: 'oauth_cb_' + Date.now()
+                      });
+                    }
+                  } catch(e) {}
+
+                  // 4. Notify window.opener if desktop popup
+                  if (window.opener && window.opener !== window) {
+                    try {
+                      window.opener.postMessage({
+                        type: 'OAUTH_AUTH_SUCCESS',
+                        provider: 'discord',
+                        user: fullDiscordUser
+                      }, '*');
+                    } catch(e) {}
+                  }
+
+                  // 5. Update UI with countdown & redirect button
                   document.getElementById('app-box').innerHTML = \`
-                    <img src="\${avatarUrl}" class="avatar" />
-                    <h2 style="margin:0 0 0.5rem 0;color:#22c55e;">🎉 Thành Công!</h2>
-                    <p style="color:#cbd5e1;margin:0;font-size:14px;">Đã xác thực @\${realUserProfile.globalName}</p>
+                    <img src="\${avatarUrl}" class="avatar" alt="Discord Avatar" />
+                    <div class="badge">Discord Đã Xác Thực</div>
+                    <h2 style="margin:0 0 0.4rem 0;color:#22c55e;font-size:20px;font-weight:900;">🎉 Đăng Nhập Thành Công!</h2>
+                    <p style="color:#cbd5e1;margin:0 0 0.5rem 0;font-size:15px;font-weight:bold;">Chào mừng @\${fullDiscordUser.globalName}</p>
+                    <p style="color:#38bdf8;font-size:13px;font-weight:600;">💰 +500.000 Xu Thưởng đã sẵn sàng trong ví!</p>
+                    <a href="/" id="btn-redirect" class="btn-action" onclick="window.location.replace('/'); return false;">
+                      🚀 VÀO GAME NGAY (<span id="timer-sec">2</span>s)
+                    </a>
                   \`;
 
-                  if (window.opener) {
-                    window.opener.postMessage({
-                      type: 'OAUTH_AUTH_SUCCESS',
-                      provider: 'discord',
-                      user: realUserProfile
-                    }, '*');
-                    setTimeout(() => window.close(), 700);
-                  } else {
-                    window.location.href = '/';
+                  // Attempt window.close() for desktop popups
+                  if (window.opener && window.opener !== window) {
+                    setTimeout(() => {
+                      try { window.close(); } catch(e) {}
+                    }, 500);
                   }
+
+                  // Auto-redirect timer: Always redirect to '/' after 2s if popup wasn't closed by browser
+                  let sec = 2;
+                  const timer = setInterval(() => {
+                    sec--;
+                    const span = document.getElementById('timer-sec');
+                    if (span) span.innerText = sec;
+                    if (sec <= 0) {
+                      clearInterval(timer);
+                      window.location.replace('/');
+                    }
+                  }, 1000);
+
                   return;
                 } catch (e) {
                   console.error(e);
                   document.getElementById('app-box').innerHTML = \`
-                    <h3 style="color:#ef4444;">❌ Lỗi truy vấn API Discord</h3>
-                    <p style="color:#94a3b8;font-size:13px;">\${e.message || 'Lỗi không xác định'}</p>
+                    <h3 style="color:#ef4444;font-size:16px;">❌ Lỗi truy vấn API Discord</h3>
+                    <p style="color:#94a3b8;font-size:13px;margin:0.5rem 0 1rem 0;">\${e.message || 'Lỗi không xác định'}</p>
+                    <a href="/" class="btn-action" style="background:#475569;">Quay Lại Game</a>
                   \`;
                   return;
                 }
               }
 
               document.getElementById('app-box').innerHTML = \`
-                <h3 style="color:#ef4444;">❌ Không tìm thấy Token xác thực</h3>
-                <p style="color:#94a3b8;font-size:13px;">Vui lòng đóng cửa sổ và thử bấm đăng nhập lại.</p>
+                <h3 style="color:#ef4444;font-size:16px;">❌ Không tìm thấy Token xác thực</h3>
+                <p style="color:#94a3b8;font-size:13px;margin:0.5rem 0 1rem 0;">Vui lòng quay lại màn hình game và bấm đăng nhập lại.</p>
+                <a href="/" class="btn-action" style="background:#475569;">Quay Lại Game</a>
               \`;
             }
             handleDiscordAuth();

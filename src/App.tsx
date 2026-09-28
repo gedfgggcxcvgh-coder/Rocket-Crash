@@ -279,9 +279,15 @@ export default function App() {
     syncChannel.addEventListener('message', handleSyncMessage);
 
     const handleStorage = (e: StorageEvent) => {
-      if (e.key === 'rocket_crash_discord_user') {
+      if (e.key === 'rocket_crash_discord_user' || e.key === 'rocket_crash_last_oauth_ts') {
         const newUser = getSavedDiscordUser();
-        setDiscordUser(newUser);
+        if (newUser) {
+          setDiscordUser(newUser);
+          setBalance(newUser.balance);
+          if (newUser.stats) {
+            setStats(prev => ({ ...prev, ...newUser.stats }));
+          }
+        }
       }
       if (e.key === SKIN_PREFS_KEY) {
         const skins = getStoredSkins(currentUserId);
@@ -292,8 +298,16 @@ export default function App() {
 
     window.addEventListener('storage', handleStorage);
 
-    const handleFocus = () => {
-      fetch(`/api/user/${currentUserId}`)
+    const handleVisibilityOrFocus = () => {
+      // Check if user logged in via OAuth in another tab/popup
+      const savedUser = getSavedDiscordUser();
+      if (savedUser && (!discordUser || discordUser.id !== savedUser.id)) {
+        setDiscordUser(savedUser);
+        setBalance(savedUser.balance);
+      }
+
+      const targetId = savedUser ? savedUser.id : currentUserId;
+      fetch(`/api/user/${targetId}`)
         .then(res => (res.ok ? res.json() : null))
         .then(serverData => {
           if (serverData && typeof serverData.balance === 'number') {
@@ -312,12 +326,28 @@ export default function App() {
         .catch(() => {});
     };
 
-    window.addEventListener('focus', handleFocus);
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    const handleOAuthPostMessage = (event: MessageEvent) => {
+      const data = event.data;
+      if (data && (data.type === 'OAUTH_AUTH_SUCCESS' || data.provider === 'discord') && data.user) {
+        sounds.playCashoutWin();
+        const rawUser = data.user;
+        setDiscordUser(rawUser);
+        if (typeof rawUser.balance === 'number') {
+          setBalance(rawUser.balance);
+        }
+      }
+    };
+    window.addEventListener('message', handleOAuthPostMessage);
 
     return () => {
       syncChannel.removeEventListener('message', handleSyncMessage);
       window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('message', handleOAuthPostMessage);
     };
   }, [currentUserId]);
 

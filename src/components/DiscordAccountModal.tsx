@@ -122,13 +122,21 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
         return;
       }
 
+      const isMobile = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        // Direct redirect on mobile avoids popup blockers and prevents orphaned tabs
+        window.location.href = data.url;
+        return;
+      }
+
       const popup = window.open(
         data.url,
         'discord_oauth_popup',
         'width=580,height=720,scrollbars=yes'
       );
       if (!popup) {
-        alert('Trình duyệt đã chặn cửa sổ popup. Vui lòng cho phép hiện popup để mở trang đăng nhập Discord!');
+        // Fallback to direct redirect if popup blocked
+        window.location.href = data.url;
       }
     } catch {
       alert('Không thể khởi tạo OAuth2 Discord.');
