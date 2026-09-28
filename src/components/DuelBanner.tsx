@@ -1,15 +1,77 @@
 import React from 'react';
-import { DuelState } from '../types/game';
-import { Swords, Trophy, RefreshCw, X, Sparkles } from 'lucide-react';
+import { DuelState, GamePhase } from '../types/game';
+import { Swords, RefreshCw, X } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface DuelBannerProps {
   duel: DuelState;
+  currentMultiplier: number;
+  phase: GamePhase;
+  userCashedOut: boolean;
+  userCashoutMultiplier?: number;
   onRematch: () => void;
   onClose: () => void;
 }
 
-export const DuelBanner: React.FC<DuelBannerProps> = ({ duel, onRematch, onClose }) => {
+export const DuelBanner: React.FC<DuelBannerProps> = ({
+  duel,
+  currentMultiplier,
+  phase,
+  userCashedOut,
+  userCashoutMultiplier,
+  onRematch,
+  onClose,
+}) => {
+  // User live status calculation
+  let userDisplayMult = '0.00x';
+  let userSubtext = 'Chưa cược';
+  let userColorClass = 'text-slate-400';
+
+  if (userCashedOut || (duel.status === 'FINISHED' && duel.userMult !== undefined && duel.userMult > 0)) {
+    const val = userCashoutMultiplier || duel.userMult || 0;
+    userDisplayMult = `${val.toFixed(2)}x`;
+    userSubtext = 'Đã Chốt';
+    userColorClass = 'text-emerald-400 font-extrabold';
+  } else if (phase === 'FLYING' && duel.status === 'PLAYING') {
+    userDisplayMult = `${currentMultiplier.toFixed(2)}x`;
+    userSubtext = 'Đang Bay 🔥';
+    userColorClass = 'text-emerald-400 font-black animate-pulse';
+  } else if (duel.status === 'FINISHED') {
+    const val = duel.userMult || 0;
+    userDisplayMult = val > 0 ? `${val.toFixed(2)}x` : '0.00x';
+    userSubtext = val > 0 ? 'Đã Chốt' : 'Nổ (0x)';
+    userColorClass = val > 0 ? 'text-emerald-400' : 'text-red-400';
+  } else if (phase === 'COUNTDOWN') {
+    userDisplayMult = '1.00x';
+    userSubtext = 'Chuẩn bị...';
+    userColorClass = 'text-slate-300';
+  }
+
+  // Opponent live status calculation
+  let oppDisplayMult = '0.00x';
+  let oppSubtext = 'Chưa cược';
+  let oppColorClass = 'text-slate-400';
+
+  if (duel.opponentCashedOut) {
+    const val = duel.opponentMult || 0;
+    oppDisplayMult = `${val.toFixed(2)}x`;
+    oppSubtext = 'Đã Chốt';
+    oppColorClass = 'text-amber-400 font-extrabold';
+  } else if (phase === 'FLYING' && duel.status === 'PLAYING') {
+    oppDisplayMult = `${currentMultiplier.toFixed(2)}x`;
+    oppSubtext = 'Đang Gồng...';
+    oppColorClass = 'text-amber-400 font-black animate-pulse';
+  } else if (duel.status === 'FINISHED') {
+    const val = duel.opponentMult || 0;
+    oppDisplayMult = val > 0 ? `${val.toFixed(2)}x` : '0.00x';
+    oppSubtext = val > 0 ? 'Đã Chốt' : 'Nổ (0x)';
+    oppColorClass = val > 0 ? 'text-amber-400' : 'text-red-400';
+  } else if (phase === 'COUNTDOWN') {
+    oppDisplayMult = '1.00x';
+    oppSubtext = 'Chuẩn bị...';
+    oppColorClass = 'text-slate-300';
+  }
+
   return (
     <div className="w-full bg-gradient-to-r from-red-950/90 via-slate-900/95 to-red-950/90 border border-red-500/60 rounded-2xl p-3 shadow-2xl backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 animate-fadeIn">
       {/* Matchup Header */}
@@ -34,20 +96,23 @@ export const DuelBanner: React.FC<DuelBannerProps> = ({ duel, onRematch, onClose
         </div>
       </div>
 
-      {/* VS Comparison */}
-      <div className="flex items-center gap-4 bg-slate-950/70 border border-slate-800 rounded-xl px-4 py-1.5 shrink-0">
+      {/* VS Comparison (Live Animated) */}
+      <div className="flex items-center gap-4 bg-slate-950/80 border border-slate-800 rounded-xl px-5 py-2 shrink-0">
         {/* User */}
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center min-w-[70px]">
           <span className="text-[10px] font-bold text-slate-400">Bạn</span>
-          <span className="text-xs font-black font-mono-numbers text-emerald-400">
-            {duel.userMult ? `${duel.userMult.toFixed(2)}x` : '0.00x'}
+          <span className={`text-sm font-black font-mono-numbers my-0.5 ${userColorClass}`}>
+            {userDisplayMult}
+          </span>
+          <span className="text-[9px] font-medium text-slate-400">
+            {userSubtext}
           </span>
         </div>
 
-        <span className="text-red-500 font-black text-xs">VS</span>
+        <span className="text-red-500 font-black text-xs px-1">VS</span>
 
         {/* Opponent */}
-        <div className="flex flex-col items-center">
+        <div className="flex flex-col items-center min-w-[80px]">
           <div className="flex items-center gap-1">
             <img
               src={duel.opponentAvatar}
@@ -58,12 +123,11 @@ export const DuelBanner: React.FC<DuelBannerProps> = ({ duel, onRematch, onClose
               {duel.opponentName}
             </span>
           </div>
-          <span className="text-xs font-black font-mono-numbers text-amber-400">
-            {duel.opponentCashedOut
-              ? `${duel.opponentMult?.toFixed(2)}x`
-              : duel.status === 'FINISHED'
-              ? `${duel.opponentMult?.toFixed(2) || '0.00'}x`
-              : 'Đang gồng...'}
+          <span className={`text-sm font-black font-mono-numbers my-0.5 ${oppColorClass}`}>
+            {oppDisplayMult}
+          </span>
+          <span className="text-[9px] font-medium text-slate-400">
+            {oppSubtext}
           </span>
         </div>
       </div>

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DuelState } from '../types/game';
 import { Swords, Trophy, RefreshCw, X, Sparkles, AlertCircle, Coins, ArrowRight } from 'lucide-react';
 import { sounds } from '../utils/audio';
+import confetti from 'canvas-confetti';
 
 interface DuelResultModalProps {
   isOpen: boolean;
@@ -18,6 +19,14 @@ export const DuelResultModal: React.FC<DuelResultModalProps> = ({
   onRematch,
   onChangeOpponent,
 }) => {
+  useEffect(() => {
+    if (isOpen && duel && duel.status === 'FINISHED' && duel.winner === 'USER') {
+      try {
+        confetti({ particleCount: 80, spread: 90, origin: { y: 0.5 } });
+      } catch {}
+    }
+  }, [isOpen, duel]);
+
   if (!isOpen || !duel || duel.status !== 'FINISHED') return null;
 
   const isUserWinner = duel.winner === 'USER';

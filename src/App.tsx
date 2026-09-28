@@ -24,6 +24,7 @@ import { DuelModal } from './components/DuelModal';
 import { DuelBanner } from './components/DuelBanner';
 import { DuelResultModal } from './components/DuelResultModal';
 import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
+import confetti from 'canvas-confetti';
 import { Volume2, VolumeX, Coins } from 'lucide-react';
 
 const INITIAL_BALANCE = 500000;
@@ -1318,6 +1319,10 @@ export default function App() {
             {activeDuel && activeDuel.active && (
               <DuelBanner
                 duel={activeDuel}
+                currentMultiplier={multiplier}
+                phase={phase}
+                userCashedOut={userCashedOut || userCashedOut2}
+                userCashoutMultiplier={userCashoutMultiplier || userCashoutMultiplier2}
                 onRematch={() => handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar)}
                 onClose={() => setActiveDuel(null)}
               />

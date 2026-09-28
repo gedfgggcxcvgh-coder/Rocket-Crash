@@ -82,7 +82,7 @@ export const LeaderboardModal: React.FC<LeaderboardModalProps> = ({ isOpen, onCl
 
             return (
               <div
-                key={item.id}
+                key={`${item.id || item.username}-${index}`}
                 className={`p-3 rounded-2xl border flex items-center justify-between gap-3 transition-all ${
                   isTop1
                     ? 'bg-gradient-to-r from-amber-950/40 via-amber-900/20 to-slate-950/40 border-amber-500/60 shadow-md shadow-amber-500/10'
