@@ -12,6 +12,7 @@ interface RocketCanvasProps {
   userBet: number;
   userCashedOut: boolean;
   userCashoutMultiplier?: number;
+  cashedOutWonAmount?: number;
   crashMultiplier?: number;
   activeEvent?: ActiveFlightEvent | null;
   onClaimEventReward?: (event: ActiveFlightEvent) => void;
@@ -65,6 +66,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
   userBet,
   userCashedOut,
   userCashoutMultiplier,
+  cashedOutWonAmount,
   crashMultiplier,
   activeEvent,
   onClaimEventReward,
@@ -1395,7 +1397,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
   };
 
   return (
-    <div className="relative w-full h-[370px] md:h-[480px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center select-none">
+    <div className="relative w-full h-[290px] xs:h-[330px] sm:h-[380px] md:h-[480px] bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 shadow-2xl flex items-center justify-center select-none">
       {/* Canvas */}
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" />
 
@@ -1539,7 +1541,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
               {multiplier.toFixed(2)}x
             </div>
 
-            {/* Current user payout ticker if playing */}
+            {/* Current user payout ticker if actively flying without cashout */}
             {userBet > 0 && !userCashedOut && (
               <div className="mt-3 py-1.5 px-4 rounded-full bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 text-emerald-400 text-sm font-semibold flex items-center gap-1.5 shadow-md shadow-emerald-500/10">
                 <span>Tiền nhận nếu dừng ngay:</span>
@@ -1549,10 +1551,25 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
               </div>
             )}
 
-            {userCashedOut && userCashoutMultiplier && (
-              <div className="mt-3 py-1 px-3.5 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs font-semibold">
-                Đã chốt thành công tại {userCashoutMultiplier.toFixed(2)}x (+
-                {Math.floor(userBet * userCashoutMultiplier).toLocaleString('vi-VN')} Xu)
+            {/* Prominent, unambiguous celebration badge when user has cashed out */}
+            {userCashedOut && (
+              <div className="mt-2.5 sm:mt-3 py-2 px-4 sm:px-6 rounded-2xl bg-emerald-950/95 border-2 border-emerald-400 text-emerald-300 flex flex-col items-center gap-1 shadow-2xl shadow-emerald-500/30 animate-in zoom-in-95">
+                <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-emerald-400">
+                  <span>✨ BẠN ĐÃ CHỐT LÃI THÀNH CÔNG!</span>
+                  {userCashoutMultiplier && (
+                    <span className="font-mono-numbers bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/40">
+                      {userCashoutMultiplier.toFixed(2)}x
+                    </span>
+                  )}
+                </div>
+                <div className="font-mono-numbers text-base sm:text-xl font-black text-white">
+                  +{((cashedOutWonAmount || (userCashoutMultiplier ? Math.floor(userBet * userCashoutMultiplier) : 0))).toLocaleString('vi-VN')} Xu
+                </div>
+                <div className="text-[10px] text-emerald-300/80 font-medium flex items-center gap-1.5">
+                  <span>✅ Tiền đã về ví an toàn</span>
+                  <span>•</span>
+                  <span className="opacity-75">Tên lửa tiếp tục bay cho phòng...</span>
+                </div>
               </div>
             )}
           </div>
@@ -1588,7 +1605,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
                 </span>
               ) : userCashedOut ? (
                 <span className="text-emerald-400 font-semibold">
-                  Tuyệt vời! Bạn đã chốt lời thành công trước khi tên lửa nổ.
+                  🎉 Tuyệt vời! Bạn đã chốt lời an toàn (+{((cashedOutWonAmount || (userCashoutMultiplier ? Math.floor(userBet * userCashoutMultiplier) : 0))).toLocaleString('vi-VN')} Xu) trước khi tên lửa nổ.
                 </span>
               ) : (
                 'Vòng đấu kết thúc. Chuẩn bị ván mới!'

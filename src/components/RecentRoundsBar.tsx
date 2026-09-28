@@ -22,12 +22,13 @@ export const RecentRoundsBar: React.FC<RecentRoundsBarProps> = ({ history, onSel
   };
 
   return (
-    <div className="w-full flex items-center justify-between gap-3 py-2 px-1">
-      <div className="flex items-center gap-1.5 shrink-0 text-xs font-semibold text-slate-400">
-        <span>Lịch sử gần đây:</span>
+    <div className="w-full max-w-full flex items-center justify-between gap-2 sm:gap-3 py-1.5 sm:py-2 px-1 overflow-hidden">
+      <div className="flex items-center gap-1 shrink-0 text-xs font-semibold text-slate-400">
+        <span className="hidden sm:inline">Lịch sử gần đây:</span>
+        <span className="sm:hidden text-[11px] font-bold">Lịch sử:</span>
       </div>
 
-      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 scroll-smooth">
+      <div className="flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 scroll-smooth min-w-0">
         {history.length === 0 ? (
           <span className="text-xs text-slate-500 italic">Đang ghi nhận vòng đấu đầu tiên...</span>
         ) : (

@@ -307,15 +307,17 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
   onOpenDuel,
   onOpenLeaderboard,
 }) => {
+  const [mobileTab, setMobileTab] = useState<'bet1' | 'bet2' | 'both'>('bet1');
+
   return (
-    <div className="w-full bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 p-4 md:p-5 shadow-xl flex flex-col gap-4">
+    <div className="w-full bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 p-3 sm:p-4 md:p-5 shadow-xl flex flex-col gap-3 sm:gap-4">
       {/* Top row: Balance, Faucet & Navigation Shortcuts */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 border-b border-slate-800/80 pb-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <div className="flex flex-col">
-            <span className="text-[11px] font-medium text-slate-400">Số dư khả dụng</span>
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold font-mono-numbers text-amber-400">
+            <span className="text-[10px] sm:text-[11px] font-medium text-slate-400">Số dư khả dụng</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-lg sm:text-xl font-bold font-mono-numbers text-amber-400">
                 {balance.toLocaleString('vi-VN')}
               </span>
               <span className="text-xs uppercase font-bold text-amber-500">Xu</span>
@@ -324,42 +326,42 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
 
           <button
             onClick={() => onAddFunds(500000)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-600/50 hover:bg-emerald-900/80 text-emerald-400 text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-600/50 hover:bg-emerald-900/80 text-emerald-400 text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer"
             title="Nhận 500.000 Xu miễn phí"
           >
             <PlusCircle className="w-3.5 h-3.5" />
-            <span>+500K Xu</span>
+            <span className="font-bold">+500K</span>
           </button>
         </div>
 
         {/* Feature Hub Buttons */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {onOpenGarage && (
             <button
               onClick={onOpenGarage}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
               title="Gara Tên Lửa & Vệt Khói Lửa"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Gara Skin</span>
+              <span>Gara</span>
             </button>
           )}
 
           {onOpenDuel && (
             <button
               onClick={onOpenDuel}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
               title="Thách đấu Solo 1v1 Chiếm Ngai"
             >
               <Swords className="w-3.5 h-3.5 text-red-400" />
-              <span>Solo 1v1</span>
+              <span>Solo</span>
             </button>
           )}
 
           {onOpenLeaderboard && (
             <button
               onClick={onOpenLeaderboard}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
               title="Bảng xếp hạng cao thủ"
             >
               <Trophy className="w-3.5 h-3.5 text-indigo-400" />
@@ -369,45 +371,88 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
         </div>
       </div>
 
-      {/* Dual Bet Panels (Side-by-Side Strategy) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-        <SingleBetPanel
-          title="Vé Cược 1"
-          badgeText="AN TOÀN"
-          badgeColorClass="bg-emerald-950/80 text-emerald-400 border-emerald-800"
-          phase={phase}
-          balance={balance}
-          currentMultiplier={currentMultiplier}
-          userBet={userBet1}
-          userCashedOut={userCashedOut1}
-          userCashoutMultiplier={userCashoutMultiplier1}
-          autoCashoutEnabled={autoCashoutEnabled1}
-          autoCashoutTarget={autoCashoutTarget1}
-          onSetAutoCashoutEnabled={onSetAutoCashoutEnabled1}
-          onSetAutoCashoutTarget={onSetAutoCashoutTarget1}
-          onPlaceBet={onPlaceBet1}
-          onCancelBet={onCancelBet1}
-          onCashout={onCashout1}
-        />
+      {/* Mobile Tab Switcher for Dual Bets */}
+      <div className="flex md:hidden items-center gap-1 p-1 bg-slate-950/80 rounded-xl border border-slate-800">
+        <button
+          type="button"
+          onClick={() => setMobileTab('bet1')}
+          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobileTab === 'bet1'
+              ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span>Vé 1 (An Toàn)</span>
+          {userBet1 > 0 && <span className="w-2 h-2 rounded-full bg-emerald-950 border border-emerald-400 animate-pulse" />}
+        </button>
 
-        <SingleBetPanel
-          title="Vé Cược 2"
-          badgeText="GỒNG ĐỈNH"
-          badgeColorClass="bg-amber-950/80 text-amber-400 border-amber-800"
-          phase={phase}
-          balance={balance}
-          currentMultiplier={currentMultiplier}
-          userBet={userBet2}
-          userCashedOut={userCashedOut2}
-          userCashoutMultiplier={userCashoutMultiplier2}
-          autoCashoutEnabled={autoCashoutEnabled2}
-          autoCashoutTarget={autoCashoutTarget2}
-          onSetAutoCashoutEnabled={onSetAutoCashoutEnabled2}
-          onSetAutoCashoutTarget={onSetAutoCashoutTarget2}
-          onPlaceBet={onPlaceBet2}
-          onCancelBet={onCancelBet2}
-          onCashout={onCashout2}
-        />
+        <button
+          type="button"
+          onClick={() => setMobileTab('bet2')}
+          className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            mobileTab === 'bet2'
+              ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20'
+              : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <span>Vé 2 (Gồng Đỉnh)</span>
+          {userBet2 > 0 && <span className="w-2 h-2 rounded-full bg-amber-950 border border-amber-400 animate-pulse" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileTab('both')}
+          className={`py-1.5 px-2.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 cursor-pointer ${
+            mobileTab === 'both' ? 'bg-slate-800 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          <span>Cả 2</span>
+        </button>
+      </div>
+
+      {/* Dual Bet Panels: Responsive Grid on Desktop, Tabbed or Stacked on Mobile */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <div className={mobileTab === 'bet1' || mobileTab === 'both' ? 'block' : 'hidden md:block'}>
+          <SingleBetPanel
+            title="Vé Cược 1"
+            badgeText="AN TOÀN"
+            badgeColorClass="bg-emerald-950/80 text-emerald-400 border-emerald-800"
+            phase={phase}
+            balance={balance}
+            currentMultiplier={currentMultiplier}
+            userBet={userBet1}
+            userCashedOut={userCashedOut1}
+            userCashoutMultiplier={userCashoutMultiplier1}
+            autoCashoutEnabled={autoCashoutEnabled1}
+            autoCashoutTarget={autoCashoutTarget1}
+            onSetAutoCashoutEnabled={onSetAutoCashoutEnabled1}
+            onSetAutoCashoutTarget={onSetAutoCashoutTarget1}
+            onPlaceBet={onPlaceBet1}
+            onCancelBet={onCancelBet1}
+            onCashout={onCashout1}
+          />
+        </div>
+
+        <div className={mobileTab === 'bet2' || mobileTab === 'both' ? 'block' : 'hidden md:block'}>
+          <SingleBetPanel
+            title="Vé Cược 2"
+            badgeText="GỒNG ĐỈNH"
+            badgeColorClass="bg-amber-950/80 text-amber-400 border-amber-800"
+            phase={phase}
+            balance={balance}
+            currentMultiplier={currentMultiplier}
+            userBet={userBet2}
+            userCashedOut={userCashedOut2}
+            userCashoutMultiplier={userCashoutMultiplier2}
+            autoCashoutEnabled={autoCashoutEnabled2}
+            autoCashoutTarget={autoCashoutTarget2}
+            onSetAutoCashoutEnabled={onSetAutoCashoutEnabled2}
+            onSetAutoCashoutTarget={onSetAutoCashoutTarget2}
+            onPlaceBet={onPlaceBet2}
+            onCancelBet={onCancelBet2}
+            onCashout={onCashout2}
+          />
+        </div>
       </div>
     </div>
   );

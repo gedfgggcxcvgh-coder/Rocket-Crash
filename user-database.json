@@ -32,5 +32,25 @@
     "id": "1119979396422439045_bet2",
     "username": "Vodka (Vé 2)",
     "balance": 1000000
+  },
+  "guest_6v8a93ro": {
+    "id": "guest_6v8a93ro",
+    "username": "Khách",
+    "balance": 10241304,
+    "equippedSkin": "UFO_ALIEN",
+    "unlockedSkins": [
+      "STANDARD",
+      "PHOENIX",
+      "CYBERPUNK",
+      "UFO_ALIEN"
+    ],
+    "stats": {
+      "totalGames": 0,
+      "wins": 0,
+      "losses": 0,
+      "totalProfit": 0,
+      "highestMultiplier": 0,
+      "totalWagered": 0
+    }
   }
 }

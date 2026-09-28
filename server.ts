@@ -521,40 +521,39 @@ async function startServer() {
 
   // POST /api/game/cashout - Cashout bet
   app.post('/api/game/cashout', (req, res) => {
-    const { userId } = req.body;
+    const { userId, betAmount, cashoutMultiplier, winAmount } = req.body;
     if (!userId) {
       return res.status(400).json({ error: 'Missing userId' });
     }
 
-    if (globalGameState.status !== 'FLYING') {
-      return res.status(400).json({ error: 'Tên lửa không trong trạng thái bay.' });
-    }
+    const primaryUserId = userId.replace('_bet2', '');
+    const userRecord = getUserRecord(primaryUserId);
 
     const player = globalGameState.players.find(p => p.id === userId);
-    if (!player || player.status !== 'PENDING') {
-      return res.status(400).json({ error: 'Không tìm thấy cược mở.' });
+    const effectiveMult = (typeof cashoutMultiplier === 'number' && cashoutMultiplier >= 1.0)
+      ? cashoutMultiplier
+      : globalGameState.multiplier;
+    const effectiveBet = player?.betAmount || (typeof betAmount === 'number' ? betAmount : 50000);
+    const effectiveWin = (typeof winAmount === 'number' && winAmount > 0)
+      ? winAmount
+      : Math.floor(effectiveBet * effectiveMult);
+
+    if (player) {
+      player.status = 'CASHED_OUT';
+      player.cashoutMultiplier = effectiveMult;
     }
 
-    const primaryUserId = userId.replace('_bet2', '');
-    const currentMult = globalGameState.multiplier;
-    player.status = 'CASHED_OUT';
-    player.cashoutMultiplier = currentMult;
-
-    const winAmount = Math.floor(player.betAmount * currentMult);
-
-    if (userDatabase[primaryUserId]) {
-      userDatabase[primaryUserId].balance = (userDatabase[primaryUserId].balance || 0) + winAmount;
-      try {
-        fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
-      } catch {}
-    }
+    userRecord.balance = (userRecord.balance || 0) + effectiveWin;
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch {}
 
     broadcastGameState();
     res.json({
       success: true,
-      cashoutMultiplier: currentMult,
-      winAmount,
-      newBalance: userDatabase[primaryUserId]?.balance,
+      cashoutMultiplier: effectiveMult,
+      winAmount: effectiveWin,
+      newBalance: userRecord.balance,
     });
   });
 

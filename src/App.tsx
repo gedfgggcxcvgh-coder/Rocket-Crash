@@ -26,7 +26,7 @@ import { DuelResultModal } from './components/DuelResultModal';
 import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
 import { getSkinById } from './utils/skins';
 import confetti from 'canvas-confetti';
-import { Volume2, VolumeX, Coins } from 'lucide-react';
+import { Volume2, VolumeX, Coins, Menu, X, Sparkles, Trophy, Swords, HelpCircle, ShieldCheck, BarChart2 } from 'lucide-react';
 
 const INITIAL_BALANCE = 500000;
 
@@ -360,6 +360,7 @@ export default function App() {
   const [showDiscordModal, setShowDiscordModal] = useState<boolean>(false);
   const [showStatsModal, setShowStatsModal] = useState<boolean>(false);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
+  const [showMobileMenu, setShowMobileMenu] = useState<boolean>(false);
 
   // Surprise Flight Events States
   const [activeEvent, setActiveEvent] = useState<ActiveFlightEvent | null>(null);
@@ -372,6 +373,12 @@ export default function App() {
   const userBetRef = useRef<number>(0);
   const autoCashoutEnabledRef = useRef<boolean>(false);
   const autoCashoutTargetRef = useRef<number>(3.0);
+
+  const isCashedOut2Ref = useRef<boolean>(false);
+  const userBet2Ref = useRef<number>(0);
+  const autoCashoutEnabled2Ref = useRef<boolean>(false);
+  const autoCashoutTarget2Ref = useRef<number>(10.0);
+
   const flightModeRef = useRef<FlightMode>(flightMode);
   const milestoneReachedRef = useRef<{ [key: number]: boolean }>({});
   const botChattedCashoutRef = useRef<{ [key: string]: boolean }>({});
@@ -395,6 +402,19 @@ export default function App() {
     autoCashoutEnabledRef.current = autoCashoutEnabled;
     autoCashoutTargetRef.current = autoCashoutTarget;
   }, [autoCashoutEnabled, autoCashoutTarget]);
+
+  useEffect(() => {
+    isCashedOut2Ref.current = userCashedOut2;
+  }, [userCashedOut2]);
+
+  useEffect(() => {
+    userBet2Ref.current = userBet2;
+  }, [userBet2]);
+
+  useEffect(() => {
+    autoCashoutEnabled2Ref.current = autoCashoutEnabled2;
+    autoCashoutTarget2Ref.current = autoCashoutTarget2;
+  }, [autoCashoutEnabled2, autoCashoutTarget2]);
 
   useEffect(() => {
     flightModeRef.current = flightMode;
@@ -592,6 +612,26 @@ export default function App() {
         const currentMult = parseFloat(Math.max(1.00, Math.pow(Math.E, 0.06 * elapsedSec)).toFixed(2));
         const finalMult = Math.min(currentMult, crashPoint);
         setMultiplier(prev => (finalMult > prev ? finalMult : prev));
+
+        // Auto Cashout for Bet 1
+        if (
+          autoCashoutEnabledRef.current &&
+          !isCashedOutRef.current &&
+          userBetRef.current > 0 &&
+          finalMult >= autoCashoutTargetRef.current
+        ) {
+          handleCashoutClick();
+        }
+
+        // Auto Cashout for Bet 2
+        if (
+          autoCashoutEnabled2Ref.current &&
+          !isCashedOut2Ref.current &&
+          userBet2Ref.current > 0 &&
+          finalMult >= autoCashoutTarget2Ref.current
+        ) {
+          handleCashoutClick2();
+        }
 
         // Trigger planned surprise flight event
         if (
@@ -1133,113 +1173,126 @@ export default function App() {
     setUserBet2(0);
   };
 
-  // Manual Cashout Bet 1
+  // Manual Cashout Bet 1 - Instant 0ms response
   const handleCashoutClick = async () => {
-    if (userCashedOut || phase !== 'FLYING') return;
+    if (userCashedOut || phase !== 'FLYING' || userBet <= 0) return;
 
-    const userId = currentUserId;
+    // 1. Immediately flag as cashed out locally to prevent race conditions & double cashout
+    isCashedOutRef.current = true;
+    setUserCashedOut(true);
 
+    const cashoutMult = Math.max(1.01, multiplier);
+    setUserCashoutMultiplier(cashoutMult);
+    sounds.playCashoutWin();
+
+    const winAmount = Math.floor(userBet * cashoutMult);
+    setBalance(prev => prev + winAmount);
+
+    const netProfit = winAmount - userBet;
+    setStats(prev => ({
+      ...prev,
+      totalGames: prev.totalGames + 1,
+      wins: prev.wins + 1,
+      totalProfit: prev.totalProfit + netProfit,
+      highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
+    }));
+
+    // Post to chat
+    const stage = getAltitudeStage(cashoutMult);
+    const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
+    const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
+    setMessages(prev => [
+      ...prev.slice(-30),
+      {
+        id: Date.now().toString(),
+        user: userDisplayName,
+        avatar: userAvatar,
+        text: `Đã chốt lời Vé 1 tại ${cashoutMult.toFixed(2)}x [${stage.badge}] (+${winAmount.toLocaleString('vi-VN')} Xu)! 🤑🎉`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        badge: discordUser ? 'DISCORD' : 'VIP',
+        isSystem: true,
+      },
+    ]);
+
+    // Send confirmation to server in background
     try {
       const res = await fetch('/api/game/cashout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({
+          userId: currentUserId,
+          betAmount: userBet,
+          cashoutMultiplier: cashoutMult,
+          winAmount,
+        }),
       });
 
       const data = await res.json();
-      if (!res.ok) return;
-
-      sounds.playCashoutWin();
-      setUserCashedOut(true);
-      setUserCashoutMultiplier(data.cashoutMultiplier);
-
-      if (typeof data.newBalance === 'number') {
+      if (res.ok && typeof data.newBalance === 'number') {
         setBalance(data.newBalance);
-      } else {
-        setBalance(prev => prev + data.winAmount);
       }
-
-      const netProfit = data.winAmount - userBet;
-      setStats(prev => ({
-        ...prev,
-        totalGames: prev.totalGames + 1,
-        wins: prev.wins + 1,
-        totalProfit: prev.totalProfit + netProfit,
-        highestMultiplier: Math.max(prev.highestMultiplier, data.cashoutMultiplier),
-      }));
-
-      // Post to chat
-      const stage = getAltitudeStage(data.cashoutMultiplier);
-      const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
-      const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
-      setMessages(prev => [
-        ...prev.slice(-30),
-        {
-          id: Date.now().toString(),
-          user: userDisplayName,
-          avatar: userAvatar,
-          text: `Đã chốt lời Vé 1 tại ${data.cashoutMultiplier.toFixed(2)}x [${stage.badge}] (+${data.winAmount.toLocaleString('vi-VN')} Xu)! 🤑🎉`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          badge: discordUser ? 'DISCORD' : 'VIP',
-          isSystem: true,
-        },
-      ]);
     } catch (err) {
       console.error('Cashout API error:', err);
     }
   };
 
-  // Manual Cashout Bet 2
+  // Manual Cashout Bet 2 - Instant 0ms response
   const handleCashoutClick2 = async () => {
-    if (userCashedOut2 || phase !== 'FLYING') return;
+    if (userCashedOut2 || phase !== 'FLYING' || userBet2 <= 0) return;
 
-    const userId = `${currentUserId}_bet2`;
+    // 1. Immediately flag as cashed out locally to prevent race conditions & double cashout
+    isCashedOut2Ref.current = true;
+    setUserCashedOut2(true);
 
+    const cashoutMult = Math.max(1.01, multiplier);
+    setUserCashoutMultiplier2(cashoutMult);
+    sounds.playCashoutWin();
+
+    const winAmt = Math.floor(userBet2 * cashoutMult);
+    setBalance(prev => prev + winAmt);
+
+    const netProfit = winAmt - userBet2;
+    setStats(prev => ({
+      ...prev,
+      totalGames: prev.totalGames + 1,
+      wins: prev.wins + 1,
+      totalProfit: prev.totalProfit + netProfit,
+      highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
+    }));
+
+    const stage = getAltitudeStage(cashoutMult);
+    const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
+    const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
+    setMessages(prev => [
+      ...prev.slice(-30),
+      {
+        id: Date.now().toString(),
+        user: userDisplayName,
+        avatar: userAvatar,
+        text: `🔥 GỒNG ĐỈNH THÀNH CÔNG Vé 2 tại ${cashoutMult.toFixed(2)}x (+${winAmt.toLocaleString('vi-VN')} Xu)!! 🎉🚀`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        badge: 'GỒNG ĐỈNH',
+        isSystem: true,
+      },
+    ]);
+
+    // Send confirmation to server in background
     try {
       const res = await fetch('/api/game/cashout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({
+          userId: `${currentUserId}_bet2`,
+          betAmount: userBet2,
+          cashoutMultiplier: cashoutMult,
+          winAmount: winAmt,
+        }),
       });
 
       const data = await res.json();
-      if (!res.ok) return;
-
-      sounds.playCashoutWin();
-      setUserCashedOut2(true);
-      setUserCashoutMultiplier2(data.cashoutMultiplier);
-
-      const winAmt = data.winAmount || Math.floor(userBet2 * data.cashoutMultiplier);
-      if (typeof data.newBalance === 'number') {
+      if (res.ok && typeof data.newBalance === 'number') {
         setBalance(data.newBalance);
-      } else {
-        setBalance(prev => prev + winAmt);
       }
-
-      const netProfit = winAmt - userBet2;
-      setStats(prev => ({
-        ...prev,
-        totalGames: prev.totalGames + 1,
-        wins: prev.wins + 1,
-        totalProfit: prev.totalProfit + netProfit,
-        highestMultiplier: Math.max(prev.highestMultiplier, data.cashoutMultiplier),
-      }));
-
-      const stage = getAltitudeStage(data.cashoutMultiplier);
-      const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
-      const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
-      setMessages(prev => [
-        ...prev.slice(-30),
-        {
-          id: Date.now().toString(),
-          user: userDisplayName,
-          avatar: userAvatar,
-          text: `🔥 GỒNG ĐỈNH THÀNH CÔNG Vé 2 tại ${data.cashoutMultiplier.toFixed(2)}x (+${winAmt.toLocaleString('vi-VN')} Xu)!! 🎉🚀`,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          badge: 'GỒNG ĐỈNH',
-          isSystem: true,
-        },
-      ]);
     } catch (err) {
       console.error('Cashout2 API error:', err);
     }
@@ -1541,89 +1594,163 @@ export default function App() {
             </button>
           </nav>
 
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Quick Mobile Garage Button */}
-            <button
-              onClick={() => setShowGarageModal(true)}
-              className="lg:hidden px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/35 hover:bg-amber-500/25 text-amber-300 font-bold text-xs flex items-center gap-1.5 transition-all active:scale-95 cursor-pointer shadow-sm"
-              title="Kho Tên Lửa & Đổi Skin"
-            >
-              <span>{getSkinById(equippedSkin).icon}</span>
-              <span className="font-extrabold">{getSkinById(equippedSkin).name.split(' ')[0]}</span>
-            </button>
-
-            <button
-              onClick={toggleSound}
-              className="p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer"
-              title={isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'}
-              aria-label="Sound Toggle"
-            >
-              {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-emerald-400" />}
-            </button>
-
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
             {/* User Balance Capsule + Quick Faucet */}
-            <div className="flex items-center gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-1 shadow-inner">
-              <div className="flex items-center gap-1.5 px-2.5 py-1">
-                <Coins className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="font-mono-numbers font-extrabold text-white text-sm">
-                  {balance.toLocaleString('vi-VN')}
+            <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-0.5 sm:p-1 shadow-inner shrink-0">
+              <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1">
+                <Coins className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="font-mono-numbers font-extrabold text-white text-xs sm:text-sm">
+                  {balance >= 10000000
+                    ? `${(balance / 1000000).toFixed(1)}M`
+                    : balance.toLocaleString('vi-VN')}
                 </span>
-                <span className="text-amber-400 font-bold text-xs">Xu</span>
+                <span className="hidden xs:inline text-amber-400 font-bold text-[10px] sm:text-xs">Xu</span>
               </div>
               <button
                 type="button"
                 onClick={() => handleAddFunds(500000)}
-                className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-[11px] transition-all active:scale-95 cursor-pointer whitespace-nowrap"
+                className="px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-black text-[10px] sm:text-[11px] transition-all active:scale-95 cursor-pointer whitespace-nowrap"
                 title="Nhận 500.000 Xu miễn phí"
               >
                 +500K
               </button>
             </div>
 
-            {/* Discord Account Header Pill */}
+            {/* Discord Account Header Pill: Compact, 100% visible on mobile, zero overflow */}
             {discordUser ? (
               <button
                 onClick={() => setShowDiscordModal(true)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-900 border border-[#5865F2]/50 hover:border-[#5865F2] text-xs transition-all shadow-sm active:scale-95 cursor-pointer"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-900 border border-[#5865F2]/60 hover:border-[#5865F2] text-xs transition-all shadow-sm active:scale-95 cursor-pointer shrink-0"
                 title="Hồ sơ tài khoản Discord & Cloud Sync"
               >
-                <div className="relative">
-                  <img src={discordUser.avatar} alt="Avatar" className="w-6 h-6 rounded-lg object-cover" />
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-slate-900" />
+                <div className="relative shrink-0">
+                  <img src={discordUser.avatar} alt="Avatar" className="w-5 h-5 sm:w-6 sm:h-6 rounded-lg object-cover" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-1.5 h-1.5 rounded-full bg-emerald-500 border border-slate-900" />
                 </div>
-                <div className="hidden sm:flex flex-col text-left leading-none">
-                  <div className="flex items-center gap-1">
-                    <span className="font-bold text-white max-w-[85px] truncate">
-                      {discordUser.globalName || discordUser.username}
-                    </span>
-                    <span className="text-[9px] px-1 rounded bg-[#5865F2] text-white font-bold">
-                      Lv.{discordUser.level || 1}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-emerald-400 font-medium">Đồng bộ Cloud</span>
+                <div className="flex flex-col text-left leading-none max-w-[65px] xs:max-w-[80px] sm:max-w-[100px]">
+                  <span className="font-bold text-white text-[11px] sm:text-xs truncate">
+                    {discordUser.globalName || discordUser.username}
+                  </span>
+                  <span className="hidden sm:inline text-[9px] text-emerald-400 font-medium">Cloud Sync</span>
                 </div>
               </button>
             ) : (
               <button
                 onClick={() => setShowDiscordModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold text-xs transition-all shadow-md shadow-indigo-500/25 active:scale-95 cursor-pointer"
+                className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 rounded-xl bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold text-xs transition-all shadow-md shadow-indigo-500/25 active:scale-95 cursor-pointer shrink-0"
                 title="Liên kết tài khoản Discord (+500.000 Xu)"
               >
-                <svg className="w-4 h-4 fill-current shrink-0" viewBox="0 0 24 24">
-                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994.021-.041.001-.09-.041-.106a13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.929 1.793 8.18 1.793 12.061 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.894.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.078.078 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.028zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
                 </svg>
-                <span>Liên Kết Discord</span>
-                <span className="text-[10px] bg-amber-400 text-slate-950 px-1.5 py-0.2 rounded-full font-black">
+                <span className="text-[11px] sm:text-xs">Discord</span>
+                <span className="text-[9px] sm:text-[10px] bg-amber-400 text-slate-950 px-1 py-0.2 rounded-full font-black">
                   +500K
                 </span>
               </button>
             )}
+
+            {/* Sound Toggle */}
+            <button
+              onClick={toggleSound}
+              className="p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 transition-colors cursor-pointer shrink-0"
+              title={isMuted ? 'Bật âm thanh' : 'Tắt âm thanh'}
+              aria-label="Sound Toggle"
+            >
+              {isMuted ? <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />}
+            </button>
+
+            {/* Mobile Navigation Drawer Toggle */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="lg:hidden p-1.5 sm:p-2 rounded-xl bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+              title="Menu tính năng"
+              aria-label="Menu"
+            >
+              {showMobileMenu ? <X className="w-4 h-4 text-amber-400" /> : <Menu className="w-4 h-4 text-slate-300" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile Navigation Dropdown Menu */}
+        {showMobileMenu && (
+          <div className="lg:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-2xl p-3 px-4 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-150 shadow-2xl">
+            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
+              <button
+                onClick={() => { setShowMobileMenu(false); setShowGarageModal(true); }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 text-slate-200 cursor-pointer"
+              >
+                <span>{getSkinById(equippedSkin).icon}</span>
+                <div className="flex flex-col text-left">
+                  <span>Kho Tên Lửa</span>
+                  <span className="text-[10px] text-amber-400 font-semibold">{getSkinById(equippedSkin).name}</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setShowMobileMenu(false); setShowLeaderboardModal(true); }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 text-slate-200 cursor-pointer"
+              >
+                <Trophy className="w-4 h-4 text-indigo-400" />
+                <div className="flex flex-col text-left">
+                  <span>Bảng Xếp Hạng</span>
+                  <span className="text-[10px] text-indigo-400 font-semibold">Top Phi Công</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setShowMobileMenu(false); setShowDuelModal(true); }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-purple-500/50 text-slate-200 cursor-pointer"
+              >
+                <Swords className="w-4 h-4 text-purple-400" />
+                <div className="flex flex-col text-left">
+                  <span>Solo 1v1</span>
+                  <span className="text-[10px] text-purple-400 font-semibold">Thách Đấu</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setShowMobileMenu(false); setShowRulesModal(true); }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 text-slate-200 cursor-pointer"
+              >
+                <HelpCircle className="w-4 h-4 text-emerald-400" />
+                <div className="flex flex-col text-left">
+                  <span>Hướng Dẫn</span>
+                  <span className="text-[10px] text-emerald-400 font-semibold">Cách Chơi</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  if (history[0]) setSelectedAuditRound(history[0]);
+                }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-emerald-500/50 text-slate-200 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <div className="flex flex-col text-left">
+                  <span>Minh Bạch</span>
+                  <span className="text-[10px] text-emerald-400 font-semibold">Provably Fair</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => { setShowMobileMenu(false); setShowStatsModal(true); }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 text-slate-200 cursor-pointer"
+              >
+                <BarChart2 className="w-4 h-4 text-amber-400" />
+                <div className="flex flex-col text-left">
+                  <span>Thống Kê</span>
+                  <span className="text-[10px] text-amber-400 font-semibold">Tỷ Lệ Thắng</span>
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 max-w-[1440px] w-full mx-auto p-3 sm:p-5 lg:p-6 flex flex-col gap-4">
+      <main className="flex-1 max-w-[1440px] w-full mx-auto p-2 sm:p-4 lg:p-6 flex flex-col gap-3 sm:gap-4 overflow-x-hidden">
         {/* Recent Rounds Multiplier Bar */}
         <RecentRoundsBar history={history} onSelectRound={setSelectedAuditRound} />
 
@@ -1645,21 +1772,36 @@ export default function App() {
             )}
 
             {/* The Rocket Canvas */}
-            <RocketCanvas
-              phase={phase}
-              multiplier={multiplier}
-              countdown={countdown}
-              userBet={userBet + userBet2}
-              userCashedOut={userCashedOut && userCashedOut2}
-              userCashoutMultiplier={userCashoutMultiplier}
-              crashMultiplier={phase === 'CRASHED' ? crashPoint : undefined}
-              activeEvent={activeEvent}
-              onClaimEventReward={handleClaimEventReward}
-              shieldSavedBet={shieldSavedBet}
-              equippedSkinId={equippedSkin}
-              jackpotPool={jackpotPool}
-              onOpenGarage={() => setShowGarageModal(true)}
-            />
+            {(() => {
+              const hasBet1 = userBet > 0;
+              const hasBet2 = userBet2 > 0;
+              const hasAnyBet = hasBet1 || hasBet2;
+              const activeFlyingBet = (hasBet1 && !userCashedOut ? userBet : 0) + (hasBet2 && !userCashedOut2 ? userBet2 : 0);
+              const isPlayerFullyCashedOut = hasAnyBet && (!hasBet1 || userCashedOut) && (!hasBet2 || userCashedOut2);
+              const totalWonAmount =
+                (hasBet1 && userCashedOut ? Math.floor(userBet * (userCashoutMultiplier || 1.0)) : 0) +
+                (hasBet2 && userCashedOut2 ? Math.floor(userBet2 * (userCashoutMultiplier2 || 1.0)) : 0);
+              const displayCashoutMultiplier = userCashoutMultiplier || userCashoutMultiplier2 || undefined;
+
+              return (
+                <RocketCanvas
+                  phase={phase}
+                  multiplier={multiplier}
+                  countdown={countdown}
+                  userBet={activeFlyingBet > 0 ? activeFlyingBet : (userBet + userBet2)}
+                  userCashedOut={isPlayerFullyCashedOut}
+                  userCashoutMultiplier={displayCashoutMultiplier}
+                  cashedOutWonAmount={totalWonAmount}
+                  crashMultiplier={phase === 'CRASHED' ? crashPoint : undefined}
+                  activeEvent={activeEvent}
+                  onClaimEventReward={handleClaimEventReward}
+                  shieldSavedBet={shieldSavedBet}
+                  equippedSkinId={equippedSkin}
+                  jackpotPool={jackpotPool}
+                  onOpenGarage={() => setShowGarageModal(true)}
+                />
+              );
+            })()}
 
             {/* Dual Betting Controls */}
             <BettingControls
