@@ -45,7 +45,7 @@ interface Particle {
   maxLife: number;
   size: number;
   color: string;
-  type: 'flame' | 'smoke' | 'spark' | 'explosion';
+  type: 'flame' | 'smoke' | 'spark' | 'explosion' | 'star' | 'ring';
 }
 
 export const RocketCanvas: React.FC<RocketCanvasProps> = ({
@@ -98,11 +98,15 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
         
         shakeRef.current.intensity = 26;
 
-        // 140 explosion particles
-        for (let i = 0; i < 140; i++) {
+        // Explosion particle color matching equipped skin
+        const skin = getSkinById(equippedSkinId || 'STANDARD');
+        const colors = [...skin.particleColorHex, '#FFFFFF', '#EF4444', '#F97316'];
+
+        for (let i = 0; i < 150; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 9 + 2;
-          const colors = ['#EF4444', '#F97316', '#FBBF24', '#DC2626', '#FFFFFF', '#A855F7'];
+          const speed = Math.random() * 10 + 2;
+          const pType = equippedSkinId === 'DRAGONFIRE' && Math.random() > 0.5 ? 'star' : 'explosion';
+
           particlesRef.current.push({
             x: rocketPos.x,
             y: rocketPos.y,
@@ -110,15 +114,15 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
             vy: Math.sin(angle) * speed,
             life: 1,
             maxLife: Math.random() * 45 + 30,
-            size: Math.random() * 7 + 3,
+            size: Math.random() * 8 + 3,
             color: colors[Math.floor(Math.random() * colors.length)],
-            type: 'explosion',
+            type: pType,
           });
         }
       }
     }
     prevPhaseRef.current = phase;
-  }, [phase, multiplier]);
+  }, [phase, multiplier, equippedSkinId]);
 
   // Calculate rocket trajectory coordinate based on multiplier
   function getRocketPosition(currentMult: number, width: number, height: number) {
@@ -212,7 +216,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.save();
       ctx.translate(offsetX, offsetY);
 
-      // 1. Deep Space Canvas Background with cosmic gradient
+      // 1. Deep Space Canvas Background
       ctx.fillStyle = '#060a13';
       ctx.fillRect(-20, -20, w + 40, h + 40);
 
@@ -248,54 +252,57 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       // 4. Grid & Trajectory Curve
       drawGrid(ctx, w, h);
 
-      // 5. Trajectory Path & Thruster Particles
+      // 5. Trajectory Path & Custom Thruster Particles
       const rocketPos = getRocketPosition(multiplier, w, h);
 
       if (phase === 'FLYING') {
         drawTrajectory(ctx, w, h, rocketPos, multiplier);
 
-        // Spawn rocket thruster particles (flame + smoke + sparks)
+        // Spawn custom rocket thruster particles based on equipped skin
         const exhaustX = rocketPos.x - Math.cos(rocketPos.angle) * 24;
         const exhaustY = rocketPos.y - Math.sin(rocketPos.angle) * 24;
 
-        // Dynamic flame color palette based on equipped skin or altitude stage
         const skin = getSkinById(equippedSkinId || 'STANDARD');
-        let pColors = skin.particleColorHex;
-        if (equippedSkinId === 'STANDARD' || !equippedSkinId) {
-          if (multiplier >= 20) {
-            pColors = ['#A855F7', '#C084FC', '#FBBF24', '#38BDF8'];
-          } else if (multiplier >= 6) {
-            pColors = ['#06B6D4', '#38BDF8', '#60A5FA', '#FFFFFF'];
-          }
-        }
+        const pColors = skin.particleColorHex;
 
+        // Custom particle generation per skin
         for (let i = 0; i < 4; i++) {
-          const spread = (Math.random() - 0.5) * 0.4;
+          const spread = (Math.random() - 0.5) * 0.45;
           const pAngle = rocketPos.angle + Math.PI + spread;
-          const pSpeed = Math.random() * 4 + 2;
+          const pSpeed = Math.random() * 4.5 + 2;
+
+          let particleType: 'flame' | 'star' | 'ring' | 'spark' = 'flame';
+          if (equippedSkinId === 'DRAGONFIRE' && Math.random() > 0.4) {
+            particleType = 'star';
+          } else if (equippedSkinId === 'UFO_ALIEN' && Math.random() > 0.6) {
+            particleType = 'ring';
+          } else if (equippedSkinId === 'CYBERPUNK' && Math.random() > 0.5) {
+            particleType = 'spark';
+          }
+
           particlesRef.current.push({
             x: exhaustX,
             y: exhaustY,
             vx: Math.cos(pAngle) * pSpeed,
             vy: Math.sin(pAngle) * pSpeed,
             life: 1,
-            maxLife: Math.random() * 22 + 15,
-            size: Math.random() * 5 + 3,
+            maxLife: Math.random() * 24 + 16,
+            size: particleType === 'ring' ? 4 : Math.random() * 5 + 3,
             color: pColors[Math.floor(Math.random() * pColors.length)],
-            type: 'flame',
+            type: particleType,
           });
         }
 
-        if (Math.random() > 0.3) {
+        if (Math.random() > 0.25) {
           particlesRef.current.push({
-            x: exhaustX + (Math.random() - 0.5) * 6,
-            y: exhaustY + (Math.random() - 0.5) * 6,
+            x: exhaustX + (Math.random() - 0.5) * 8,
+            y: exhaustY + (Math.random() - 0.5) * 8,
             vx: -Math.cos(rocketPos.angle) * 1.5 + (Math.random() - 0.5),
             vy: -Math.sin(rocketPos.angle) * 1.5 + (Math.random() - 0.5),
             life: 1,
             maxLife: Math.random() * 35 + 25,
             size: Math.random() * 10 + 6,
-            color: 'rgba(148, 163, 184, 0.35)',
+            color: equippedSkinId === 'CYBERPUNK' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(148, 163, 184, 0.35)',
             type: 'smoke',
           });
         }
@@ -304,12 +311,11 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       // 6. Update & draw particles
       updateAndDrawParticles(ctx);
 
-      // 7. Draw Active Event Visuals (Warp, Shield, Crate, Overheat)
+      // 7. Draw Active Event Visuals
       if (activeEvent && phase === 'FLYING') {
         if (activeEvent.type === 'WARP_NITRO') {
           drawWarpLines(ctx, w, h, 95);
         } else if (activeEvent.type === 'ENGINE_OVERHEAT') {
-          // Warning red vignette around screen
           const alpha = (0.5 + 0.5 * Math.sin(Date.now() * 0.012)) * 0.45;
           ctx.save();
           ctx.strokeStyle = `rgba(239, 68, 68, ${alpha})`;
@@ -323,11 +329,11 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
         }
       }
 
-      // 8. Draw Rocket Ship
+      // 8. Draw Custom Rocket Ship Model
       if (phase !== 'CRASHED') {
         drawRocket(ctx, rocketPos.x, rocketPos.y, rocketPos.angle, phase === 'FLYING', multiplier);
 
-        // Draw Alien Shield bubble and escort UFO if shield active
+        // Draw Alien Shield bubble if active
         if (activeEvent && activeEvent.type === 'ALIEN_SHIELD' && phase === 'FLYING') {
           drawAlienShield(ctx, rocketPos.x, rocketPos.y);
         }
@@ -346,28 +352,28 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
     };
-  }, [phase, multiplier]);
+  }, [phase, multiplier, equippedSkinId]);
 
   // Cosmic Nebula atmosphere
   function drawCosmicNebula(ctx: CanvasRenderingContext2D, w: number, h: number, mult: number) {
+    const skin = getSkinById(equippedSkinId || 'STANDARD');
+    const primaryGlow = skin.glowColor || '#EF4444';
+
     if (mult < 6) {
-      // Subtle deep blue nebula
       const grad = ctx.createRadialGradient(w * 0.75, h * 0.3, 10, w * 0.75, h * 0.3, w * 0.6);
-      grad.addColorStop(0, 'rgba(59, 130, 246, 0.12)');
+      grad.addColorStop(0, `${primaryGlow}22`);
       grad.addColorStop(0.6, 'rgba(99, 102, 241, 0.04)');
       grad.addColorStop(1, 'rgba(6, 10, 19, 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     } else if (mult < 30) {
-      // Golden / Purple Lunar glow
       const grad = ctx.createRadialGradient(w * 0.75, h * 0.25, 20, w * 0.75, h * 0.25, w * 0.7);
-      grad.addColorStop(0, 'rgba(234, 179, 8, 0.16)');
-      grad.addColorStop(0.5, 'rgba(168, 85, 247, 0.08)');
+      grad.addColorStop(0, 'rgba(234, 179, 8, 0.18)');
+      grad.addColorStop(0.5, 'rgba(168, 85, 247, 0.10)');
       grad.addColorStop(1, 'rgba(6, 10, 19, 0)');
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, w, h);
     } else {
-      // Cosmic Deep Space Galaxy
       const grad = ctx.createRadialGradient(w * 0.70, h * 0.25, 20, w * 0.70, h * 0.25, w * 0.85);
       grad.addColorStop(0, 'rgba(236, 72, 153, 0.22)');
       grad.addColorStop(0.4, 'rgba(168, 85, 247, 0.15)');
@@ -378,9 +384,8 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     }
   }
 
-  // Draw background planets / celestial bodies
+  // Draw background planets
   function drawCelestialBodies(ctx: CanvasRenderingContext2D, w: number, h: number, mult: number) {
-    // 1. Earth curve at bottom-left when at low altitude (< 4.5x)
     if (mult < 5.0) {
       ctx.save();
       const earthAlpha = Math.max(0, 1 - (mult - 1) / 4.0);
@@ -399,7 +404,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.restore();
     }
 
-    // 2. The Moon (appears between 4x and 25x)
     if (mult >= 4.0 && mult < 28.0) {
       ctx.save();
       const moonProgress = (mult - 4.0) / 24.0;
@@ -408,7 +412,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       const moonAlpha = Math.sin(moonProgress * Math.PI) * 0.75;
       ctx.globalAlpha = moonAlpha;
 
-      // Moon body
       ctx.fillStyle = '#E2E8F0';
       ctx.shadowColor = '#FBBF24';
       ctx.shadowBlur = 15;
@@ -416,37 +419,12 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.arc(moonX, moonY, 18, 0, Math.PI * 2);
       ctx.fill();
 
-      // Moon craters
       ctx.fillStyle = 'rgba(100, 116, 139, 0.4)';
       ctx.shadowBlur = 0;
       ctx.beginPath();
       ctx.arc(moonX - 5, moonY - 3, 4, 0, Math.PI * 2);
       ctx.arc(moonX + 4, moonY + 4, 5, 0, Math.PI * 2);
       ctx.arc(moonX + 3, moonY - 6, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // 3. Mars (appears between 22x and 80x)
-    if (mult >= 20.0 && mult < 90.0) {
-      ctx.save();
-      const marsProgress = (mult - 20.0) / 70.0;
-      const marsX = w * 0.90 - marsProgress * (w * 0.45);
-      const marsY = h * 0.35 + marsProgress * (h * 0.25);
-      const marsAlpha = Math.sin(marsProgress * Math.PI) * 0.8;
-      ctx.globalAlpha = marsAlpha;
-
-      // Mars red glow
-      const gradMars = ctx.createRadialGradient(marsX, marsY, 4, marsX, marsY, 22);
-      gradMars.addColorStop(0, '#F87171');
-      gradMars.addColorStop(0.7, '#C53030');
-      gradMars.addColorStop(1, 'rgba(197, 48, 48, 0)');
-
-      ctx.fillStyle = gradMars;
-      ctx.shadowColor = '#EF4444';
-      ctx.shadowBlur = 18;
-      ctx.beginPath();
-      ctx.arc(marsX, marsY, 16, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
@@ -476,7 +454,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.restore();
   }
 
-  // Draw coordinate grid and altitude lines
+  // Draw coordinate grid
   function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
     ctx.strokeStyle = 'rgba(51, 65, 85, 0.25)';
     ctx.lineWidth = 1;
@@ -489,7 +467,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.stroke();
     });
 
-    // Launch ground baseline
     ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -497,7 +474,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.lineTo(w * 0.95, h * 0.86);
     ctx.stroke();
 
-    // Launchpad icon/platform at bottom-left
     ctx.fillStyle = '#334155';
     ctx.fillRect(w * 0.08, h * 0.86, w * 0.12, 6);
     ctx.fillStyle = '#10B981';
@@ -516,12 +492,12 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     const startX = w * 0.12;
     const startY = h * 0.82;
 
-    const trajColor = mult >= 20 ? '#A855F7' : mult >= 6 ? '#06B6D4' : '#F59E0B';
+    const skin = getSkinById(equippedSkinId || 'STANDARD');
+    const trajColor = skin.trailColorHex[0] || (mult >= 20 ? '#A855F7' : mult >= 6 ? '#06B6D4' : '#F59E0B');
 
-    // Curve fill under trajectory
     const gradArea = ctx.createLinearGradient(0, startY, 0, rocketPos.y);
     gradArea.addColorStop(0, 'rgba(245, 158, 11, 0)');
-    gradArea.addColorStop(1, mult >= 20 ? 'rgba(168, 85, 247, 0.18)' : 'rgba(245, 158, 11, 0.15)');
+    gradArea.addColorStop(1, `${trajColor}22`);
 
     ctx.beginPath();
     ctx.moveTo(startX, startY);
@@ -531,7 +507,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.fillStyle = gradArea;
     ctx.fill();
 
-    // Trajectory glowing line
     ctx.save();
     ctx.strokeStyle = trajColor;
     ctx.lineWidth = 3.5;
@@ -563,13 +538,37 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       const alpha = 1 - progress;
       ctx.globalAlpha = Math.max(0, alpha);
 
-      if (p.type === 'flame') {
+      if (p.type === 'flame' || p.type === 'spark') {
         ctx.fillStyle = p.color;
         ctx.shadowColor = p.color;
         ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size * (1 - progress * 0.4), 0, Math.PI * 2);
         ctx.fill();
+      } else if (p.type === 'star') {
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        const r = p.size * (1 - progress * 0.3);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y - r);
+        ctx.lineTo(p.x + r * 0.3, p.y - r * 0.3);
+        ctx.lineTo(p.x + r, p.y);
+        ctx.lineTo(p.x + r * 0.3, p.y + r * 0.3);
+        ctx.lineTo(p.x, p.y + r);
+        ctx.lineTo(p.x - r * 0.3, p.y + r * 0.3);
+        ctx.lineTo(p.x - r, p.y);
+        ctx.lineTo(p.x - r * 0.3, p.y - r * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      } else if (p.type === 'ring') {
+        ctx.strokeStyle = p.color;
+        ctx.lineWidth = 2;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 + progress * 1.6), 0, Math.PI * 2);
+        ctx.stroke();
       } else if (p.type === 'smoke') {
         ctx.fillStyle = p.color;
         ctx.beginPath();
@@ -587,7 +586,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     }
   }
 
-  // Draw high fidelity vector rocket ship
+  // Draw Rocket Router delegating to skin models
   function drawRocket(
     ctx: CanvasRenderingContext2D,
     x: number,
@@ -600,30 +599,39 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.translate(x, y);
     ctx.rotate(angle);
 
-    // Thruster Fire Plume
+    const skinId = equippedSkinId || 'STANDARD';
+
+    switch (skinId) {
+      case 'CYBERPUNK':
+        drawCyberpunkRocket(ctx, isFiring);
+        break;
+      case 'PHOENIX':
+        drawPhoenixRocket(ctx, isFiring);
+        break;
+      case 'UFO_ALIEN':
+        drawUfoAlienRocket(ctx, isFiring);
+        break;
+      case 'DRAGONFIRE':
+        drawDragonfireRocket(ctx, isFiring);
+        break;
+      case 'STANDARD':
+      default:
+        drawStandardRocket(ctx, isFiring);
+        break;
+    }
+
+    ctx.restore();
+  }
+
+  // 1. STANDARD ROCKET MODEL
+  function drawStandardRocket(ctx: CanvasRenderingContext2D, isFiring: boolean) {
     if (isFiring) {
       const flameLength = 28 + Math.random() * 14;
       const flameGrad = ctx.createLinearGradient(-18, 0, -18 - flameLength, 0);
-
-      if (mult >= 20) {
-        // Cosmic Violet Plasma
-        flameGrad.addColorStop(0, '#FFFFFF');
-        flameGrad.addColorStop(0.2, '#FBBF24');
-        flameGrad.addColorStop(0.6, '#A855F7');
-        flameGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
-      } else if (mult >= 6) {
-        // Ion Electric Blue
-        flameGrad.addColorStop(0, '#FFFFFF');
-        flameGrad.addColorStop(0.2, '#67E8F9');
-        flameGrad.addColorStop(0.6, '#0284C7');
-        flameGrad.addColorStop(1, 'rgba(2, 132, 199, 0)');
-      } else {
-        // Traditional rocket fire
-        flameGrad.addColorStop(0, '#FFFFFF');
-        flameGrad.addColorStop(0.2, '#FBBF24');
-        flameGrad.addColorStop(0.7, '#EF4444');
-        flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
-      }
+      flameGrad.addColorStop(0, '#FFFFFF');
+      flameGrad.addColorStop(0.2, '#FBBF24');
+      flameGrad.addColorStop(0.7, '#EF4444');
+      flameGrad.addColorStop(1, 'rgba(239, 68, 68, 0)');
 
       ctx.beginPath();
       ctx.moveTo(-16, -5);
@@ -631,11 +639,10 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.lineTo(-16, 5);
       ctx.closePath();
       ctx.fillStyle = flameGrad;
-      ctx.shadowColor = mult >= 20 ? '#A855F7' : mult >= 6 ? '#06B6D4' : '#F59E0B';
-      ctx.shadowBlur = 16;
+      ctx.shadowColor = '#F59E0B';
+      ctx.shadowBlur = 14;
       ctx.fill();
 
-      // Inner intense core
       ctx.beginPath();
       ctx.moveTo(-16, -2.5);
       ctx.lineTo(-18 - flameLength * 0.5, 0);
@@ -645,12 +652,10 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.fill();
     }
 
-    // Rocket Nozzle
     ctx.fillStyle = '#334155';
     ctx.fillRect(-18, -4, 4, 8);
 
-    // Wings / Fins
-    ctx.fillStyle = '#DC2626'; // Vivid red fins
+    ctx.fillStyle = '#DC2626';
     ctx.beginPath();
     ctx.moveTo(-12, -7);
     ctx.lineTo(-16, -15);
@@ -665,8 +670,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.closePath();
     ctx.fill();
 
-    // Fuselage / Rocket Body
-    ctx.fillStyle = '#F8FAFC'; // Clean ceramic white body
+    ctx.fillStyle = '#F8FAFC';
     ctx.beginPath();
     ctx.moveTo(-14, -7);
     ctx.lineTo(10, -7);
@@ -675,7 +679,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.closePath();
     ctx.fill();
 
-    // Nose cone cap
     ctx.fillStyle = '#DC2626';
     ctx.beginPath();
     ctx.moveTo(10, -7);
@@ -683,7 +686,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.closePath();
     ctx.fill();
 
-    // Cockpit porthole window
     ctx.fillStyle = '#0284C7';
     ctx.beginPath();
     ctx.arc(3, 0, 4, 0, Math.PI * 2);
@@ -692,12 +694,292 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.beginPath();
     ctx.arc(2, -1, 1.8, 0, Math.PI * 2);
     ctx.fill();
+  }
 
-    // Metallic highlight stripe
-    ctx.fillStyle = 'rgba(148, 163, 184, 0.4)';
-    ctx.fillRect(-6, -6, 2, 12);
+  // 2. CYBERPUNK NEON MODEL
+  function drawCyberpunkRocket(ctx: CanvasRenderingContext2D, isFiring: boolean) {
+    if (isFiring) {
+      const flameLength = 34 + Math.random() * 16;
+      const flameGrad = ctx.createLinearGradient(-20, 0, -20 - flameLength, 0);
+      flameGrad.addColorStop(0, '#FFFFFF');
+      flameGrad.addColorStop(0.25, '#22D3EE');
+      flameGrad.addColorStop(0.65, '#A855F7');
+      flameGrad.addColorStop(1, 'rgba(168, 85, 247, 0)');
 
-    ctx.restore();
+      ctx.beginPath();
+      ctx.moveTo(-18, -7);
+      ctx.lineTo(-20 - flameLength, 0);
+      ctx.lineTo(-18, 7);
+      ctx.closePath();
+      ctx.fillStyle = flameGrad;
+      ctx.shadowColor = '#A855F7';
+      ctx.shadowBlur = 20;
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#1E1B4B';
+    ctx.strokeStyle = '#06B6D4';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#06B6D4';
+    ctx.shadowBlur = 10;
+
+    ctx.beginPath();
+    ctx.moveTo(-10, -6);
+    ctx.lineTo(-22, -22);
+    ctx.lineTo(2, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-10, 6);
+    ctx.lineTo(-22, 22);
+    ctx.lineTo(2, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#0F172A';
+    ctx.strokeStyle = '#EC4899';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#EC4899';
+    ctx.shadowBlur = 12;
+
+    ctx.beginPath();
+    ctx.moveTo(-18, -6);
+    ctx.lineTo(12, -6);
+    ctx.lineTo(28, 0);
+    ctx.lineTo(12, 6);
+    ctx.lineTo(-18, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#22D3EE';
+    ctx.shadowColor = '#22D3EE';
+    ctx.shadowBlur = 12;
+    ctx.fillRect(4, -3, 10, 6);
+
+    ctx.fillStyle = '#EC4899';
+    ctx.fillRect(-10, -1, 12, 2);
+  }
+
+  // 3. PHOENIX FLAME MODEL
+  function drawPhoenixRocket(ctx: CanvasRenderingContext2D, isFiring: boolean) {
+    if (isFiring) {
+      const flameLength = 36 + Math.random() * 20;
+      const flameGrad = ctx.createLinearGradient(-16, 0, -16 - flameLength, 0);
+      flameGrad.addColorStop(0, '#FEF08A');
+      flameGrad.addColorStop(0.3, '#F59E0B');
+      flameGrad.addColorStop(0.7, '#DC2626');
+      flameGrad.addColorStop(1, 'rgba(220, 38, 38, 0)');
+
+      ctx.beginPath();
+      ctx.moveTo(-16, -9);
+      ctx.lineTo(-16 - flameLength, -2);
+      ctx.lineTo(-16 - flameLength * 1.2, 0);
+      ctx.lineTo(-16 - flameLength, 2);
+      ctx.lineTo(-16, 9);
+      ctx.closePath();
+      ctx.fillStyle = flameGrad;
+      ctx.shadowColor = '#F59E0B';
+      ctx.shadowBlur = 22;
+      ctx.fill();
+    }
+
+    const wingGrad = ctx.createLinearGradient(-10, 0, 10, -20);
+    wingGrad.addColorStop(0, '#DC2626');
+    wingGrad.addColorStop(0.6, '#EA580C');
+    wingGrad.addColorStop(1, '#F59E0B');
+
+    ctx.fillStyle = wingGrad;
+    ctx.shadowColor = '#EA580C';
+    ctx.shadowBlur = 12;
+
+    ctx.beginPath();
+    ctx.moveTo(-8, -5);
+    ctx.quadraticCurveTo(-18, -20, -10, -22);
+    ctx.quadraticCurveTo(2, -18, 8, -5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(-8, 5);
+    ctx.quadraticCurveTo(-18, 20, -10, 22);
+    ctx.quadraticCurveTo(2, 18, 8, 5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#EA580C';
+    ctx.beginPath();
+    ctx.moveTo(-16, -6);
+    ctx.lineTo(10, -6);
+    ctx.quadraticCurveTo(26, 0, 10, 6);
+    ctx.lineTo(-16, 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#F59E0B';
+    ctx.beginPath();
+    ctx.moveTo(10, -6);
+    ctx.lineTo(26, -2);
+    ctx.lineTo(32, 0);
+    ctx.lineTo(26, 2);
+    ctx.lineTo(10, 6);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#FEF08A';
+    ctx.shadowColor = '#FBBF24';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(14, -6);
+    ctx.lineTo(18, -14);
+    ctx.lineTo(22, -5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 4. UFO ALIEN SAUCER MODEL
+  function drawUfoAlienRocket(ctx: CanvasRenderingContext2D, isFiring: boolean) {
+    if (isFiring) {
+      const beamLen = 30 + Math.random() * 12;
+      const beamGrad = ctx.createLinearGradient(-18, 0, -18 - beamLen, 0);
+      beamGrad.addColorStop(0, '#A7F3D0');
+      beamGrad.addColorStop(0.3, '#34D399');
+      beamGrad.addColorStop(0.8, '#10B981');
+      beamGrad.addColorStop(1, 'rgba(16, 185, 129, 0)');
+
+      ctx.fillStyle = beamGrad;
+      ctx.shadowColor = '#10B981';
+      ctx.shadowBlur = 20;
+      ctx.fillRect(-18 - beamLen, -5, beamLen, 10);
+    }
+
+    ctx.fillStyle = 'rgba(103, 232, 249, 0.45)';
+    ctx.strokeStyle = '#22D3EE';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#22D3EE';
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.ellipse(0, -6, 14, 12, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#34D399';
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(0, -8, 5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#0F172A';
+    ctx.beginPath();
+    ctx.ellipse(-2, -9, 1.8, 2.5, -0.3, 0, Math.PI * 2);
+    ctx.ellipse(2, -9, 1.8, 2.5, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+
+    const discGrad = ctx.createLinearGradient(-22, 0, 22, 0);
+    discGrad.addColorStop(0, '#0F766E');
+    discGrad.addColorStop(0.5, '#14B8A6');
+    discGrad.addColorStop(1, '#0D9488');
+
+    ctx.fillStyle = discGrad;
+    ctx.strokeStyle = '#5EEAD4';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#10B981';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.ellipse(0, 2, 24, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    const colors = ['#FBBF24', '#34D399', '#38BDF8', '#F43F5E'];
+    const timeIdx = Math.floor(Date.now() / 180);
+    [-18, -9, 0, 9, 18].forEach((offset, idx) => {
+      ctx.fillStyle = colors[(idx + timeIdx) % colors.length];
+      ctx.shadowColor = ctx.fillStyle;
+      ctx.shadowBlur = 8;
+      ctx.beginPath();
+      ctx.arc(offset, 4, 2, 0, Math.PI * 2);
+      ctx.fill();
+    });
+  }
+
+  // 5. DRAGONFIRE IMPERIAL STARSHIP MODEL
+  function drawDragonfireRocket(ctx: CanvasRenderingContext2D, isFiring: boolean) {
+    if (isFiring) {
+      const flameLength = 38 + Math.random() * 18;
+      const flameGrad = ctx.createLinearGradient(-20, 0, -20 - flameLength, 0);
+      flameGrad.addColorStop(0, '#FFFFFF');
+      flameGrad.addColorStop(0.2, '#FEF08A');
+      flameGrad.addColorStop(0.6, '#F59E0B');
+      flameGrad.addColorStop(1, 'rgba(245, 158, 11, 0)');
+
+      ctx.beginPath();
+      ctx.moveTo(-18, -8);
+      ctx.lineTo(-20 - flameLength, 0);
+      ctx.lineTo(-18, 8);
+      ctx.closePath();
+      ctx.fillStyle = flameGrad;
+      ctx.shadowColor = '#F59E0B';
+      ctx.shadowBlur = 24;
+      ctx.fill();
+    }
+
+    const goldGrad = ctx.createLinearGradient(-15, -15, 15, 15);
+    goldGrad.addColorStop(0, '#F59E0B');
+    goldGrad.addColorStop(0.5, '#FCD34D');
+    goldGrad.addColorStop(1, '#B45309');
+
+    ctx.fillStyle = goldGrad;
+    ctx.strokeStyle = '#FEF08A';
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = '#F59E0B';
+    ctx.shadowBlur = 16;
+
+    ctx.beginPath();
+    ctx.moveTo(-12, -6);
+    ctx.lineTo(-20, -20);
+    ctx.lineTo(-4, -18);
+    ctx.lineTo(6, -6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-12, 6);
+    ctx.lineTo(-20, 20);
+    ctx.lineTo(-4, 18);
+    ctx.lineTo(6, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(-18, -6);
+    ctx.lineTo(14, -6);
+    ctx.lineTo(28, 0);
+    ctx.lineTo(14, 6);
+    ctx.lineTo(-18, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#38BDF8';
+    ctx.shadowColor = '#38BDF8';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.moveTo(-2, -5);
+    ctx.lineTo(4, 0);
+    ctx.lineTo(-2, 5);
+    ctx.lineTo(-8, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = '#FEF08A';
+    ctx.beginPath();
+    ctx.arc(18, -2, 1.8, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   function drawCrashEpicenter(ctx: CanvasRenderingContext2D, x: number, y: number) {
@@ -716,8 +998,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
   // Draw UFO and glowing shield around rocket
   function drawAlienShield(ctx: CanvasRenderingContext2D, rx: number, ry: number) {
     ctx.save();
-
-    // 1. Pulsing Energy Shield Bubble around Rocket
     const pulse = 1 + 0.05 * Math.sin(Date.now() * 0.008);
     const shieldRadius = 38 * pulse;
 
@@ -734,11 +1014,9 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.fill();
     ctx.restore();
 
-    // 2. Mini Escort UFO flying above rocket
     const ufoX = rx + 24;
     const ufoY = ry - 42 + Math.sin(Date.now() * 0.006) * 5;
 
-    // Tractor beam
     ctx.strokeStyle = 'rgba(34, 211, 238, 0.35)';
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 4]);
@@ -748,7 +1026,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // UFO cockpit
     ctx.fillStyle = '#67E8F9';
     ctx.shadowColor = '#38BDF8';
     ctx.shadowBlur = 10;
@@ -756,13 +1033,11 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.arc(ufoX, ufoY - 4, 8, Math.PI, 0);
     ctx.fill();
 
-    // UFO disc
     ctx.fillStyle = '#0891B2';
     ctx.beginPath();
     ctx.ellipse(ufoX, ufoY, 18, 5, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Blinking lights
     const colors = ['#FBBF24', '#34D399', '#F43F5E'];
     [-10, 0, 10].forEach((ox, i) => {
       ctx.fillStyle = colors[(i + Math.floor(Date.now() / 250)) % colors.length];
@@ -782,7 +1057,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     const cx = w * 0.55 + Math.sin(t * 1.2) * (w * 0.15);
     const cy = h * 0.28 + Math.cos(t * 0.8) * (h * 0.08);
 
-    // Parachute cords
     ctx.strokeStyle = 'rgba(251, 191, 36, 0.5)';
     ctx.lineWidth = 1.5;
     ctx.beginPath();
@@ -792,24 +1066,20 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.lineTo(cx + 10, cy - 8);
     ctx.stroke();
 
-    // Mini parachute canopy
     ctx.fillStyle = '#F59E0B';
     ctx.beginPath();
     ctx.arc(cx, cy - 35, 26, Math.PI, 0);
     ctx.fill();
 
-    // Golden Box Body
     ctx.fillStyle = '#FBBF24';
     ctx.shadowColor = '#F59E0B';
     ctx.shadowBlur = 15;
     ctx.fillRect(cx - 14, cy - 8, 28, 24);
 
-    // Box Ribbon / Lock
     ctx.fillStyle = '#DC2626';
     ctx.fillRect(cx - 3, cy - 8, 6, 24);
     ctx.fillRect(cx - 14, cy + 2, 28, 5);
 
-    // Beacon blinker
     ctx.fillStyle = Math.sin(Date.now() * 0.015) > 0 ? '#10B981' : '#EF4444';
     ctx.beginPath();
     ctx.arc(cx, cy - 10, 2.5, 0, Math.PI * 2);
@@ -826,7 +1096,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     const ex = w * 0.48 + Math.cos(t) * (w * 0.18);
     const ey = h * 0.25 + Math.sin(t * 1.5) * (h * 0.06);
 
-    // Red envelope shape
     ctx.save();
     ctx.translate(ex, ey);
     ctx.rotate(Math.sin(t * 1.2) * 0.15);
@@ -836,7 +1105,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.shadowBlur = 14;
     ctx.fillRect(-12, -18, 24, 34);
 
-    // Gold flap & symbol
     ctx.fillStyle = '#FBBF24';
     ctx.beginPath();
     ctx.moveTo(-12, -18);
@@ -845,7 +1113,6 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.closePath();
     ctx.fill();
 
-    // Gold coin seal
     ctx.beginPath();
     ctx.arc(0, 0, 4.5, 0, Math.PI * 2);
     ctx.fill();
@@ -1050,8 +1317,8 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       </div>
 
       <div className="absolute top-3 right-4 z-10 text-xs text-slate-400 font-mono-numbers hidden sm:flex items-center gap-2">
-        <span className="text-slate-500">Độ cao:</span>
-        <span className="text-slate-300 font-semibold">{currentStage.badge}</span>
+        <span className="text-slate-500 font-medium">Trang Phục:</span>
+        <span className="text-amber-400 font-bold">{getSkinById(equippedSkinId || 'STANDARD').name}</span>
       </div>
     </div>
   );

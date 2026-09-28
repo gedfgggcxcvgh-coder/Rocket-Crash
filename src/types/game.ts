@@ -86,6 +86,9 @@ export interface RocketSkin {
   name: string;
   price: number;
   description: string;
+  effectDescription?: string;
+  rarity?: 'THƯỜNG' | 'HIẾM' | 'CỰC HIẾM' | 'HUYỀN THOẠI' | 'THẦN THOẠI';
+  glowColor?: string;
   icon: string;
   trailColorHex: string[];
   particleColorHex: string[];

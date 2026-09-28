@@ -3,17 +3,17 @@
     "discordId": "1119979396422439045",
     "username": "Vodka",
     "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
-    "balance": 16120000,
+    "balance": 135334018,
     "stats": {
-      "balance": 10560000,
-      "totalGames": 7,
-      "wins": 4,
+      "balance": 129634018,
+      "totalGames": 14,
+      "wins": 11,
       "losses": 3,
-      "totalProfit": 20825000,
-      "highestMultiplier": 3.13,
-      "totalWagered": 35604760
+      "totalProfit": 155039018,
+      "highestMultiplier": 4.22,
+      "totalWagered": 120600160
     },
-    "lastSyncedAt": 1790560126576
+    "lastSyncedAt": 1790562511273
   },
   "guest_q2tklz38": {
     "id": "guest_q2tklz38",

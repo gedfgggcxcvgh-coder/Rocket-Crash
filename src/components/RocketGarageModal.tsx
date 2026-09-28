@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { RocketSkin, RocketSkinId } from '../types/game';
-import { ROCKET_SKINS } from '../utils/skins';
-import { X, Check, Lock, Sparkles, Coins } from 'lucide-react';
+import { ROCKET_SKINS, getSkinById } from '../utils/skins';
+import { X, Check, Lock, Sparkles, Coins, Flame, Shield, Eye } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
 interface RocketGarageModalProps {
@@ -23,11 +23,103 @@ export const RocketGarageModal: React.FC<RocketGarageModalProps> = ({
   onEquipSkin,
   onBuySkin,
 }) => {
+  const [selectedPreviewSkin, setSelectedPreviewSkin] = useState<RocketSkinId>(equippedSkin);
+  const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedPreviewSkin(equippedSkin);
+    }
+  }, [isOpen, equippedSkin]);
+
+  // Live Preview Canvas Loop inside Garage Modal
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const canvas = previewCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animId: number;
+    let t = 0;
+
+    const render = () => {
+      t += 0.03;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // Dark space background
+      ctx.fillStyle = '#090d16';
+      ctx.fillRect(0, 0, w, h);
+
+      // Star dots
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      for (let i = 0; i < 20; i++) {
+        const sx = (i * 37 + t * 40) % w;
+        const sy = (i * 19) % h;
+        ctx.beginPath();
+        ctx.arc(w - sx, sy, (i % 3) * 0.5 + 1, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // Floating Rocket Position
+      const rx = w * 0.5;
+      const ry = h * 0.55 + Math.sin(t * 2) * 6;
+      const currentSkin = getSkinById(selectedPreviewSkin);
+
+      ctx.save();
+      ctx.translate(rx, ry);
+      ctx.rotate(-0.15 + Math.sin(t * 1.5) * 0.05);
+
+      // Draw custom flame trail based on skin
+      const flameLen = 30 + Math.random() * 12;
+      const flameGrad = ctx.createLinearGradient(-20, 0, -20 - flameLen, 0);
+      flameGrad.addColorStop(0, '#FFFFFF');
+      flameGrad.addColorStop(0.3, currentSkin.trailColorHex[0] || '#F97316');
+      flameGrad.addColorStop(0.8, currentSkin.trailColorHex[1] || '#EF4444');
+      flameGrad.addColorStop(1, 'transparent');
+
+      ctx.beginPath();
+      ctx.moveTo(-18, -6);
+      ctx.lineTo(-20 - flameLen, 0);
+      ctx.lineTo(-18, 6);
+      ctx.closePath();
+      ctx.fillStyle = flameGrad;
+      ctx.shadowColor = currentSkin.trailColorHex[0] || '#F97316';
+      ctx.shadowBlur = 18;
+      ctx.fill();
+
+      // Simple vector silhouette/icon inside canvas
+      ctx.fillStyle = currentSkin.glowColor || '#FFFFFF';
+      ctx.shadowColor = currentSkin.glowColor || '#FFFFFF';
+      ctx.shadowBlur = 12;
+      ctx.font = '28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(currentSkin.icon, 0, 0);
+
+      ctx.restore();
+
+      animId = requestAnimationFrame(render);
+    };
+
+    animId = requestAnimationFrame(render);
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  }, [isOpen, selectedPreviewSkin]);
+
   if (!isOpen) return null;
 
+  const activePreviewData = getSkinById(selectedPreviewSkin);
+  const isPreviewUnlocked = unlockedSkins.includes(selectedPreviewSkin) || activePreviewData.price === 0;
+  const isPreviewEquipped = equippedSkin === selectedPreviewSkin;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fadeIn">
-      <div className="relative w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col gap-6 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+      <div className="relative w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-3xl p-5 md:p-6 shadow-2xl flex flex-col gap-5 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800/80 pb-4">
           <div className="flex items-center gap-3">
@@ -38,20 +130,88 @@ export const RocketGarageModal: React.FC<RocketGarageModalProps> = ({
               <h2 className="text-xl font-black text-white font-display tracking-tight flex items-center gap-2">
                 GARA TÊN LỬA VŨ TRỤ
               </h2>
-              <p className="text-xs text-slate-400">Mở khóa trang phục & vệt khói lửa độc quyền</p>
+              <p className="text-xs text-slate-400">Mở khóa trang phục & hiệu ứng khói lửa độc quyền</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/50 hover:bg-slate-800 transition-colors"
+            className="p-2 text-slate-400 hover:text-white rounded-xl bg-slate-800/50 hover:bg-slate-800 transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Top Live Preview Banner */}
+        <div className="w-full bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 relative overflow-hidden shadow-inner">
+          <div className="flex items-center gap-4 z-10">
+            {/* Live Canvas Box */}
+            <div className="relative w-36 h-24 rounded-xl border border-slate-700 bg-slate-900 overflow-hidden shrink-0 shadow-lg">
+              <canvas ref={previewCanvasRef} width={144} height={96} className="w-full h-full block" />
+              <div className="absolute top-1 left-1 px-1.5 py-0.2 rounded bg-slate-950/80 text-[9px] text-slate-300 font-bold border border-slate-800 flex items-center gap-1">
+                <Eye className="w-2.5 h-2.5 text-cyan-400" />
+                <span>XEM TRƯỚC</span>
+              </div>
+            </div>
+
+            {/* Skin Info */}
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-black text-white">{activePreviewData.name}</span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-500/40">
+                  {activePreviewData.rarity || 'HIẾM'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-300">{activePreviewData.description}</p>
+              <p className="text-[11px] text-amber-400 font-medium flex items-center gap-1 mt-0.5">
+                <Flame className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Hiệu ứng: {activePreviewData.effectDescription || 'Vệt lửa năng lượng độc quyền'}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Action Button inside Banner */}
+          <div className="z-10 w-full md:w-auto shrink-0">
+            {isPreviewEquipped ? (
+              <button
+                disabled
+                className="w-full md:w-auto px-5 py-2.5 rounded-xl bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30 flex items-center justify-center gap-1.5 cursor-default"
+              >
+                <Check className="w-4 h-4" />
+                <span>Đang Trang Bị</span>
+              </button>
+            ) : isPreviewUnlocked ? (
+              <button
+                onClick={() => {
+                  sounds.playClick();
+                  onEquipSkin(selectedPreviewSkin);
+                }}
+                className="w-full md:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-extrabold text-xs transition-all active:scale-95 shadow-lg shadow-indigo-600/30 cursor-pointer"
+              >
+                Trang Bị Ngay
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  if (balance >= activePreviewData.price) {
+                    sounds.playClaimReward();
+                    onBuySkin(activePreviewData);
+                  } else {
+                    sounds.playErrorBeep();
+                  }
+                }}
+                disabled={balance < activePreviewData.price}
+                className="w-full md:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-40 text-slate-950 font-black text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/25 cursor-pointer"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Mở Khóa ({activePreviewData.price.toLocaleString('vi-VN')} Xu)</span>
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* User Balance Capsule */}
-        <div className="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-2xl px-4 py-3">
+        <div className="flex items-center justify-between bg-slate-950/60 border border-slate-800 rounded-2xl px-4 py-2.5">
           <span className="text-xs text-slate-400 font-medium">Số dư khả dụng:</span>
           <div className="flex items-center gap-1.5">
             <Coins className="w-4 h-4 text-amber-400" />
@@ -63,17 +223,21 @@ export const RocketGarageModal: React.FC<RocketGarageModalProps> = ({
         </div>
 
         {/* Skins Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
           {ROCKET_SKINS.map(skin => {
             const isUnlocked = unlockedSkins.includes(skin.id) || skin.price === 0;
             const isEquipped = equippedSkin === skin.id;
+            const isSelected = selectedPreviewSkin === skin.id;
 
             return (
               <div
                 key={skin.id}
-                className={`relative rounded-2xl border p-4 flex flex-col justify-between gap-3 transition-all ${
-                  isEquipped
-                    ? 'bg-amber-950/20 border-amber-500/60 shadow-lg shadow-amber-500/10'
+                onClick={() => setSelectedPreviewSkin(skin.id)}
+                className={`relative rounded-2xl border p-3.5 flex flex-col justify-between gap-3 transition-all cursor-pointer ${
+                  isSelected
+                    ? 'ring-2 ring-amber-500/80 bg-slate-950 border-amber-500/60 shadow-lg shadow-amber-500/10'
+                    : isEquipped
+                    ? 'bg-amber-950/20 border-amber-500/40'
                     : isUnlocked
                     ? 'bg-slate-950/50 border-slate-800 hover:border-slate-700'
                     : 'bg-slate-950/30 border-slate-800/60 opacity-85'
@@ -82,77 +246,44 @@ export const RocketGarageModal: React.FC<RocketGarageModalProps> = ({
                 {/* Skin Icon & Name */}
                 <div className="flex items-start gap-3">
                   <div
-                    className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center text-2xl shrink-0 shadow-inner"
+                    className="w-11 h-11 rounded-2xl bg-slate-900 border border-slate-700/80 flex items-center justify-center text-2xl shrink-0 shadow-inner"
                     style={{
-                      boxShadow: `0 0 15px ${skin.trailColorHex[0]}33`,
+                      boxShadow: `0 0 15px ${skin.glowColor || skin.trailColorHex[0]}33`,
                     }}
                   >
                     {skin.icon}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center justify-between gap-1">
                       <h3 className="font-bold text-white text-sm truncate">{skin.name}</h3>
-                      {isEquipped && (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-black text-[10px]">
-                          Đang dùng
-                        </span>
-                      )}
+                      <span className="px-1.5 py-0.2 rounded text-[9px] font-black uppercase tracking-wider bg-slate-800 text-amber-400 border border-slate-700 shrink-0">
+                        {skin.rarity || 'HIẾM'}
+                      </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-tight mt-1">{skin.description}</p>
+                    <p className="text-[11px] text-slate-400 leading-tight mt-1 line-clamp-2">
+                      {skin.description}
+                    </p>
                   </div>
                 </div>
 
                 {/* Trail colors preview */}
-                <div className="flex items-center gap-2 pt-1 border-t border-slate-800/60">
-                  <span className="text-[10px] text-slate-500 font-medium">Vệt lửa:</span>
-                  <div className="flex items-center gap-1">
-                    {skin.trailColorHex.map((c, idx) => (
-                      <span
-                        key={idx}
-                        className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
+                <div className="flex items-center justify-between pt-2 border-t border-slate-800/60">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-slate-500 font-medium">Vệt Lửa:</span>
+                    <div className="flex items-center gap-1">
+                      {skin.trailColorHex.map((c, idx) => (
+                        <span
+                          key={idx}
+                          className="w-3 h-3 rounded-full border border-white/20 shadow-sm"
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Action button */}
-                <div className="pt-2">
-                  {isEquipped ? (
-                    <button
-                      disabled
-                      className="w-full py-2 rounded-xl bg-amber-500/20 text-amber-300 font-bold text-xs border border-amber-500/30 flex items-center justify-center gap-1.5 cursor-default"
-                    >
-                      <Check className="w-3.5 h-3.5" />
-                      <span>Đang Trang Bị</span>
-                    </button>
-                  ) : isUnlocked ? (
-                    <button
-                      onClick={() => {
-                        sounds.playClick();
-                        onEquipSkin(skin.id);
-                      }}
-                      className="w-full py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs transition-all active:scale-95 shadow-md shadow-indigo-600/25"
-                    >
-                      Trang Bị Vệt Lửa
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => {
-                        if (balance >= skin.price) {
-                          sounds.playClaimReward();
-                          onBuySkin(skin);
-                        } else {
-                          sounds.playErrorBeep();
-                        }
-                      }}
-                      disabled={balance < skin.price}
-                      className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 font-extrabold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20"
-                    >
-                      <Lock className="w-3.5 h-3.5" />
-                      <span>Mở Khóa ({skin.price.toLocaleString('vi-VN')} Xu)</span>
-                    </button>
-                  )}
+                  <span className="text-[11px] font-black font-mono-numbers text-amber-400">
+                    {skin.price === 0 ? 'MIỄN PHÍ' : `${skin.price.toLocaleString('vi-VN')} Xu`}
+                  </span>
                 </div>
               </div>
             );
