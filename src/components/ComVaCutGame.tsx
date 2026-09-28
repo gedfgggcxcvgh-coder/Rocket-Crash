@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X } from 'lucide-react';
+import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sounds } from '../utils/audio';
 import { Real3DDice } from './Real3DDice';
@@ -110,9 +110,11 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }, 50);
   };
 
-  // Phases: 'BETTING' (18s) -> 'SHAKING' (3s) -> 'OPENING' (8s nặn bát) -> 'RESULT' (4s)
+  // Phases: 'BETTING' (25s: 20s cược + 5s KHÓA CƯỢC) -> 'SHAKING' (3s) -> 'OPENING' (8s nặn bát) -> 'RESULT' (4s)
   const [phase, setPhase] = useState<'BETTING' | 'SHAKING' | 'OPENING' | 'RESULT'>('BETTING');
-  const [timeLeft, setTimeLeft] = useState<number>(18);
+  const [timeLeft, setTimeLeft] = useState<number>(25);
+  // Khóa cược khi không ở phiên cược HOẶC khi bước vào 5 giây cuối của phiên cược
+  const isBetLocked = phase !== 'BETTING' || timeLeft <= 5;
   const [roundNumber, setRoundNumber] = useState<number>(() => {
     const saved = localStorage.getItem('comcut_round_no');
     return saved ? parseInt(saved, 10) : 1388;
@@ -263,8 +265,18 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev > 1) {
-          // Dynamic live room bets
-          if (phase === 'BETTING' && Math.random() > 0.35) {
+          // Warning chime and notification when entering locked betting phase at 5 seconds
+          if (phase === 'BETTING' && prev === 6) {
+            sounds.playErrorBeep();
+            setScoreNotification({
+              text: '🔒 HẾT THỜI GIAN ĐẶT! HỆ THỐNG ĐÃ KHÓA CƯỢC',
+              positive: false,
+            });
+            setTimeout(() => setScoreNotification(null), 2500);
+          }
+
+          // Dynamic live room bets (only during open betting window, stop when locked)
+          if (phase === 'BETTING' && prev > 6 && Math.random() > 0.35) {
             const side: 'COM' | 'CUT' = Math.random() > 0.49 ? 'COM' : 'CUT';
             const chipOpts = [20000, 50000, 100000, 200000, 500000, 1000000];
             const amt = chipOpts[Math.floor(Math.random() * chipOpts.length)];
@@ -345,7 +357,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           setCountCom(35 + Math.floor(Math.random() * 20));
           setCountCut(33 + Math.floor(Math.random() * 20));
           setPhase('BETTING');
-          return 18;
+          return 25; // 20s cược + 5s khóa cược!
         }
         return 10;
       });
@@ -496,7 +508,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
   // Place bet action - Deduct balance immediately
   const handlePlaceBet = (side: ComCutBetType) => {
-    if (phase !== 'BETTING') return;
+    if (isBetLocked) {
+      sounds.playErrorBeep();
+      setScoreNotification({
+        text: '🔒 Hệ thống đã khóa cược! Vui lòng chờ phiên sau',
+        positive: false,
+      });
+      setTimeout(() => setScoreNotification(null), 2000);
+      return;
+    }
     if (balance < selectedChip) {
       sounds.playErrorBeep();
       setScoreNotification({
@@ -528,7 +548,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   };
 
   const handleDoubleBet = () => {
-    if (phase !== 'BETTING') return;
+    if (isBetLocked) {
+      sounds.playErrorBeep();
+      setScoreNotification({
+        text: '🔒 Hệ thống đã khóa cược! Vui lòng chờ phiên sau',
+        positive: false,
+      });
+      setTimeout(() => setScoreNotification(null), 2000);
+      return;
+    }
     const currentTotal = Object.values(userBets).reduce((a, b) => a + b, 0);
     if (currentTotal === 0 || balance < currentTotal) {
       sounds.playErrorBeep();
@@ -546,7 +574,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   };
 
   const handleReBet = () => {
-    if (phase !== 'BETTING') return;
+    if (isBetLocked) {
+      sounds.playErrorBeep();
+      setScoreNotification({
+        text: '🔒 Hệ thống đã khóa cược! Vui lòng chờ phiên sau',
+        positive: false,
+      });
+      setTimeout(() => setScoreNotification(null), 2000);
+      return;
+    }
     const previousTotal = Object.values(lastRoundBets).reduce((a, b) => a + b, 0);
     if (previousTotal === 0 || balance < previousTotal) {
       sounds.playErrorBeep();
@@ -558,7 +594,10 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   };
 
   const clearBets = () => {
-    if (phase !== 'BETTING') return;
+    if (isBetLocked) {
+      sounds.playErrorBeep();
+      return;
+    }
     const totalPlaced = Object.values(userBets).reduce((a, b) => a + b, 0);
     if (totalPlaced > 0) {
       onUpdateBalance(balance + totalPlaced);
@@ -754,14 +793,14 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             {history.slice(0, 18).map((h, i) => (
               <div
                 key={h.id}
-                className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-xs font-black shadow-sm shrink-0 border transition-all ${
+                className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full flex flex-col items-center justify-center font-mono-numbers font-black shadow-sm shrink-0 border transition-all ${
                   h.result === 'COM'
-                    ? 'bg-amber-500/25 border-amber-400 text-amber-300'
-                    : 'bg-yellow-950 border-yellow-700 text-yellow-500'
-                } ${i === 0 ? 'scale-110 ring-2 ring-white/70 animate-pulse' : 'opacity-85'}`}
-                title={`Phiên #${h.roundNumber}: ${h.total}đ - ${h.result === 'COM' ? 'CƠM' : 'CỨT'}`}
+                    ? 'bg-gradient-to-b from-amber-500/30 to-amber-600/40 border-amber-400 text-amber-300 shadow-amber-500/20'
+                    : 'bg-gradient-to-b from-yellow-950 to-yellow-900 border-yellow-600 text-yellow-400 shadow-yellow-800/20'
+                } ${i === 0 ? 'scale-110 ring-2 ring-white/90 animate-pulse' : 'opacity-90'}`}
+                title={`Phiên #${h.roundNumber}: ${h.total} điểm (${h.dices.join('-')}) - ${h.result === 'COM' ? 'CƠM' : 'CỨT'}`}
               >
-                {h.result === 'COM' ? '🍚' : '💩'}
+                <span className="text-[9px] sm:text-[10px] leading-none">{h.total}</span>
               </div>
             ))}
           </div>
@@ -784,12 +823,20 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
         {/* 1. STATUS BADGE */}
         <div className={`z-10 flex items-center gap-2 ${isLandscapeActive ? 'mb-0.5' : 'mb-2'}`}>
-          {phase === 'BETTING' && (
+          {phase === 'BETTING' && !isBetLocked && (
             <div className={`rounded-full bg-emerald-950/90 border border-emerald-500/50 text-emerald-400 font-black flex items-center gap-1.5 shadow-md ${
               isLandscapeActive ? 'px-2 py-0.5 text-[9px]' : 'px-3 py-1 text-[11px] sm:text-xs'
             }`}>
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-              <span>ĐANG ĐẶT CƯỢC ({timeLeft}s)</span>
+              <span>ĐANG ĐẶT CƯỢC ({timeLeft - 5}s)</span>
+            </div>
+          )}
+          {phase === 'BETTING' && isBetLocked && (
+            <div className={`rounded-full bg-rose-950/95 border-2 border-rose-500 text-rose-300 font-black flex items-center gap-1.5 shadow-[0_0_25px_rgba(244,63,94,0.6)] animate-pulse ${
+              isLandscapeActive ? 'px-2.5 py-0.5 text-[9px]' : 'px-3.5 py-1 text-[11px] sm:text-xs'
+            }`}>
+              <Lock className="w-3 h-3 text-rose-400 animate-bounce" />
+              <span>🔒 ĐÃ KHÓA CƯỢC ({timeLeft}s)</span>
             </div>
           )}
           {phase === 'SHAKING' && (
@@ -831,14 +878,14 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* CỬA CƠM (BÊN TRÁI ~ 34% WIDTH) */}
           <div
             onClick={() => handlePlaceBet('COM')}
-            className={`flex-1 rounded-2xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between shadow-xl relative overflow-hidden group ${
+            className={`flex-1 rounded-2xl border-2 transition-all select-none flex flex-col justify-between shadow-xl relative overflow-hidden group ${
               isLandscapeActive ? 'p-1.5 h-full min-h-0' : 'p-2 sm:p-4 min-h-[190px] sm:min-h-[240px]'
             } ${
               userBets.COM > 0
                 ? 'bg-gradient-to-b from-amber-950/90 via-slate-900 to-amber-950/90 border-amber-400 shadow-amber-500/30 ring-2 ring-amber-400/40'
                 : 'bg-gradient-to-b from-slate-900/90 via-slate-950/90 to-amber-950/30 border-amber-500/40 hover:border-amber-400'
             } ${phase === 'RESULT' && lastResultOutcome === 'COM' ? 'ring-4 ring-amber-400 animate-pulse' : ''} ${
-              phase !== 'BETTING' ? 'cursor-default' : 'active:scale-[0.98]'
+              isBetLocked ? 'cursor-not-allowed opacity-85' : 'cursor-pointer active:scale-[0.98]'
             }`}
           >
             <div>
@@ -880,17 +927,17 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                 </span>
               </div>
               <button
-                disabled={phase !== 'BETTING'}
-                className={`w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black uppercase tracking-wider shadow-md cursor-pointer disabled:opacity-50 ${
+                disabled={isBetLocked}
+                className={`w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black uppercase tracking-wider shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   isLandscapeActive ? 'py-1 text-[9px] sm:text-[10px]' : 'py-1.5 sm:py-2.5 text-[10px] sm:text-xs'
-                }`}
+                } ${isBetLocked ? 'grayscale' : 'cursor-pointer active:scale-95'}`}
               >
-                {userBets.COM > 0 ? '+ CƯỢC THÊM' : 'CƯỢC CƠM'}
+                {isBetLocked ? '🔒 ĐÃ KHÓA' : (userBets.COM > 0 ? '+ CƯỢC THÊM' : 'CƯỢC CƠM')}
               </button>
             </div>
           </div>
 
-          {/* ĐĨA LẮC & BÁT ÚP RỒNG (Ở CHÍNH GIỮA) */}
+          {/* ĐĨA LẮC & BÁT ÚP (Ở CHÍNH GIỮA) */}
           <div className={`shrink-0 flex flex-col items-center justify-center relative py-0.5 ${
             isLandscapeActive ? 'w-[115px] xs:w-[130px] sm:w-[160px]' : 'w-[140px] xs:w-[170px] sm:w-[230px]'
           }`}>
@@ -898,15 +945,31 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             <div className={`${isLandscapeActive ? 'mb-0.5' : 'mb-1.5'} flex items-center justify-center`}>
               <div className={`${
                 isLandscapeActive ? 'w-6 h-6 border' : 'w-10 h-10 sm:w-13 sm:h-13 border-2 sm:border-3'
-              } rounded-full bg-slate-950 border-amber-500/80 shadow-[0_0_15px_rgba(217,119,6,0.4)] flex flex-col items-center justify-center`}>
+              } rounded-full bg-slate-950 ${
+                isBetLocked && phase === 'BETTING'
+                  ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)] animate-pulse'
+                  : 'border-amber-500/80 shadow-[0_0_15px_rgba(217,119,6,0.4)]'
+              } flex flex-col items-center justify-center`}>
                 <span
                   className={`font-mono-numbers font-black leading-none ${
                     isLandscapeActive ? 'text-xs' : 'text-sm sm:text-lg'
-                  } ${timeLeft <= 5 ? 'text-red-400 animate-pulse' : 'text-amber-400'}`}
+                  } ${
+                    isBetLocked && phase === 'BETTING'
+                      ? 'text-rose-400 animate-pulse'
+                      : timeLeft <= 5
+                      ? 'text-red-400 animate-pulse'
+                      : 'text-amber-400'
+                  }`}
                 >
-                  {timeLeft}
+                  {phase === 'BETTING' && !isBetLocked ? timeLeft - 5 : timeLeft}
                 </span>
-                {!isLandscapeActive && <span className="text-[7px] text-slate-400 uppercase font-bold">Giây</span>}
+                {!isLandscapeActive && (
+                  <span className={`text-[7px] uppercase font-bold ${
+                    isBetLocked && phase === 'BETTING' ? 'text-rose-400' : 'text-slate-400'
+                  }`}>
+                    {isBetLocked && phase === 'BETTING' ? 'Khóa' : 'Giây'}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -917,8 +980,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               } ${phase === 'SHAKING' ? 'animate-plate-rattle shadow-[0_0_55px_rgba(245,158,11,0.6)]' : ''}`}
             >
               {/* Inner plate felt */}
-              <div className="absolute inset-1 sm:inset-1.5 rounded-full border border-dashed border-amber-400/40 flex items-center justify-center">
-                <div className="absolute inset-0.5 sm:inset-1 rounded-full bg-gradient-to-b from-[#2e0808] via-[#170303] to-[#230606] shadow-[inset_0_4px_25px_rgba(0,0,0,0.9)] flex items-center justify-center p-1">
+              <div className="absolute inset-1 sm:inset-1.5 rounded-full border border-dashed border-amber-400/40 flex items-center justify-center overflow-hidden">
+                <div className="absolute inset-0.5 sm:inset-1 rounded-full bg-gradient-to-b from-[#2e0808] via-[#170303] to-[#230606] shadow-[inset_0_4px_25px_rgba(0,0,0,0.9)] flex items-center justify-center p-1 relative">
+                  {/* Dynamic warm golden glow revealed as lid slides */}
+                  <div
+                    style={{
+                      opacity: isLidFullyOpen ? 0.35 : Math.min(Math.hypot(lidOffset.x, lidOffset.y) / 80, 0.85),
+                    }}
+                    className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(245,158,11,0.45)_0%,_transparent_75%)] pointer-events-none transition-opacity duration-150"
+                  />
                   {/* 3 Real 3D Ivory Dices in Classic Casino Triangle Formation */}
                   <div className="flex flex-col items-center justify-center z-10">
                     {/* Top Dice */}
@@ -955,14 +1025,16 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                   onMouseDown={handleTouchOrMouseDown}
                   onTouchStart={handleTouchOrMouseDown}
                   style={{
-                    transform: `translate(${lidOffset.x}px, ${lidOffset.y}px) ${
+                    transform: `translate3d(${lidOffset.x}px, ${lidOffset.y}px, 0) ${
                       phase === 'SHAKING' ? 'rotate(3deg)' : ''
                     }`,
-                    transition: isDraggingLid ? 'none' : 'transform 0.3s ease-out',
+                    transition: isDraggingLid ? 'none' : 'transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+                    touchAction: 'none',
+                    willChange: 'transform',
                   }}
-                  className={`absolute inset-0 rounded-full opacity-100 bg-[#150f0b] border-3 sm:border-5 border-amber-400 shadow-[0_15px_35px_rgba(0,0,0,0.95)] flex flex-col items-center justify-center cursor-grab active:cursor-grabbing z-30 select-none overflow-hidden ${
+                  className={`absolute inset-0 rounded-full opacity-100 bg-[#150f0b] border-3 sm:border-5 border-amber-400 shadow-[0_20px_45px_rgba(0,0,0,0.98)] flex flex-col items-center justify-center cursor-grab active:cursor-grabbing z-30 select-none overflow-hidden ${
                     phase === 'OPENING'
-                      ? 'ring-4 ring-amber-400/90 shadow-[0_0_35px_rgba(245,158,11,0.7)]'
+                      ? 'ring-4 ring-amber-400/90 shadow-[0_0_40px_rgba(245,158,11,0.8)]'
                       : ''
                   }`}
                 >
@@ -1008,7 +1080,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                   MỞ NHANH ⚡
                 </button>
               )}
-              {phase === 'BETTING' && !isLandscapeActive && (
+              {phase === 'BETTING' && !isBetLocked && !isLandscapeActive && (
                 <button
                   onClick={() => {
                     setPhase('SHAKING');
@@ -1023,9 +1095,10 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
             {/* Win announcement badge */}
             {phase === 'RESULT' && lastWinAmount > 0 && (
-              <div className="mt-0.5 py-0.5 px-2 rounded-full bg-emerald-950/95 border border-emerald-400 text-emerald-300 flex items-center gap-1 shadow-lg animate-in zoom-in-95">
-                <span className="text-[10px]">🎉</span>
-                <span className="font-mono-numbers font-black text-white text-[10px] sm:text-xs">
+              <div className="mt-1 py-1 px-3 rounded-full bg-gradient-to-r from-amber-600 via-yellow-400 to-amber-500 text-slate-950 font-black flex items-center gap-1.5 shadow-[0_0_25px_rgba(245,158,11,0.8)] border border-amber-200 animate-in zoom-in-90 duration-300">
+                <span className="text-xs sm:text-sm animate-bounce">🏆</span>
+                <span className="text-[10px] sm:text-xs uppercase tracking-wider">THẮNG:</span>
+                <span className="font-mono-numbers font-black text-xs sm:text-sm text-slate-950">
                   +{lastWinAmount.toLocaleString('vi-VN')} Xu
                 </span>
               </div>
@@ -1035,14 +1108,14 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* CỬA CỨT (BÊN PHẢI ~ 34% WIDTH) */}
           <div
             onClick={() => handlePlaceBet('CUT')}
-            className={`flex-1 rounded-2xl border-2 transition-all cursor-pointer select-none flex flex-col justify-between shadow-xl relative overflow-hidden group ${
+            className={`flex-1 rounded-2xl border-2 transition-all select-none flex flex-col justify-between shadow-xl relative overflow-hidden group ${
               isLandscapeActive ? 'p-1.5 h-full min-h-0' : 'p-2 sm:p-4 min-h-[190px] sm:min-h-[240px]'
             } ${
               userBets.CUT > 0
                 ? 'bg-gradient-to-b from-yellow-950/90 via-slate-900 to-yellow-950/90 border-yellow-600 shadow-yellow-700/30 ring-2 ring-yellow-600/40'
                 : 'bg-gradient-to-b from-slate-900/90 via-slate-950/90 to-yellow-950/30 border-yellow-700/40 hover:border-yellow-600'
             } ${phase === 'RESULT' && lastResultOutcome === 'CUT' ? 'ring-4 ring-yellow-500 animate-pulse' : ''} ${
-              phase !== 'BETTING' ? 'cursor-default' : 'active:scale-[0.98]'
+              isBetLocked ? 'cursor-not-allowed opacity-85' : 'cursor-pointer active:scale-[0.98]'
             }`}
           >
             <div>
@@ -1084,12 +1157,12 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                 </span>
               </div>
               <button
-                disabled={phase !== 'BETTING'}
-                className={`w-full rounded-xl bg-gradient-to-r from-yellow-600 to-amber-700 text-white font-black uppercase tracking-wider shadow-md cursor-pointer disabled:opacity-50 ${
+                disabled={isBetLocked}
+                className={`w-full rounded-xl bg-gradient-to-r from-yellow-600 to-amber-700 text-white font-black uppercase tracking-wider shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   isLandscapeActive ? 'py-1 text-[9px] sm:text-[10px]' : 'py-1.5 sm:py-2.5 text-[10px] sm:text-xs'
-                }`}
+                } ${isBetLocked ? 'grayscale' : 'cursor-pointer active:scale-95'}`}
               >
-                {userBets.CUT > 0 ? '+ CƯỢC THÊM' : 'CƯỢC CỨT'}
+                {isBetLocked ? '🔒 ĐÃ KHÓA' : (userBets.CUT > 0 ? '+ CƯỢC THÊM' : 'CƯỢC CỨT')}
               </button>
             </div>
           </div>
@@ -1102,13 +1175,13 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* BÃO CƠM */}
           <div
             onClick={() => handlePlaceBet('BAO_COM')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+            className={`rounded-xl border transition-all flex flex-col items-center justify-between text-center ${
               isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.BAO_COM > 0
                 ? 'bg-amber-950/80 border-amber-400 shadow-md ring-1 ring-amber-400/50'
-                : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40'
-            }`}
+                : 'bg-slate-900/60 border-slate-800'
+            } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-amber-500/40'}`}
           >
             <div className="flex flex-col items-center">
               <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🍚🍚🍚</span>
@@ -1125,13 +1198,13 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* BÃO CỨT */}
           <div
             onClick={() => handlePlaceBet('BAO_CUT')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+            className={`rounded-xl border transition-all flex flex-col items-center justify-between text-center ${
               isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.BAO_CUT > 0
                 ? 'bg-yellow-950/80 border-yellow-600 shadow-md ring-1 ring-yellow-500/50'
-                : 'bg-slate-900/60 border-slate-800 hover:border-yellow-600/40'
-            }`}
+                : 'bg-slate-900/60 border-slate-800'
+            } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-yellow-600/40'}`}
           >
             <div className="flex flex-col items-center">
               <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>💩💩💩</span>
@@ -1148,13 +1221,13 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* CƠM GÀ */}
           <div
             onClick={() => handlePlaceBet('COM_GA')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+            className={`rounded-xl border transition-all flex flex-col items-center justify-between text-center ${
               isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.COM_GA > 0
                 ? 'bg-amber-950/80 border-amber-400 shadow-md ring-1 ring-amber-400/50'
-                : 'bg-slate-900/60 border-slate-800 hover:border-amber-500/40'
-            }`}
+                : 'bg-slate-900/60 border-slate-800'
+            } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-amber-500/40'}`}
           >
             <div className="flex flex-col items-center">
               <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🍗🍚</span>
@@ -1171,13 +1244,13 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* CỨT RUỒI */}
           <div
             onClick={() => handlePlaceBet('CUT_RUOI')}
-            className={`rounded-xl border transition-all cursor-pointer flex flex-col items-center justify-between text-center ${
+            className={`rounded-xl border transition-all flex flex-col items-center justify-between text-center ${
               isLandscapeActive ? 'p-0.5' : 'p-1.5 sm:p-2'
             } ${
               userBets.CUT_RUOI > 0
                 ? 'bg-yellow-950/80 border-yellow-600 shadow-md ring-1 ring-yellow-500/50'
-                : 'bg-slate-900/60 border-slate-800 hover:border-yellow-600/40'
-            }`}
+                : 'bg-slate-900/60 border-slate-800'
+            } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:border-yellow-600/40'}`}
           >
             <div className="flex flex-col items-center">
               <span className={isLandscapeActive ? 'text-[9px]' : 'text-xs sm:text-sm'}>🪰💩</span>
@@ -1198,7 +1271,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       {/* ============================================================== */}
       <div className={`bg-slate-900/90 border border-slate-800 rounded-xl sm:rounded-2xl flex flex-wrap items-center justify-between gap-1 shadow-lg shrink-0 ${
         isLandscapeActive ? 'p-1 px-2' : 'p-2 sm:p-2.5'
-      }`}>
+      } ${isBetLocked ? 'opacity-70' : ''}`}>
         {/* Chip Denominations */}
         <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-none py-0.5">
           {CHIP_DENOMINATIONS.map((chip) => {
@@ -1206,14 +1279,18 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             return (
               <button
                 key={chip.value}
-                onClick={() => setSelectedChip(chip.value)}
-                className={`relative rounded-full flex flex-col items-center justify-center border-2 border-dashed shadow-md transition-all active:scale-95 cursor-pointer shrink-0 ${
+                disabled={isBetLocked}
+                onClick={() => {
+                  sounds.playChipClink();
+                  setSelectedChip(chip.value);
+                }}
+                className={`relative rounded-full flex flex-col items-center justify-center border-2 border-dashed shadow-md transition-all shrink-0 ${
                   isLandscapeActive ? 'w-7 h-7 sm:w-8 sm:h-8' : 'w-10 h-10 sm:w-12 sm:h-12'
                 } ${chip.color} ${
                   isSelected
                     ? `scale-110 -translate-y-0.5 ring-2 sm:ring-3 ${chip.ring} brightness-110`
                     : 'opacity-85 hover:opacity-100'
-                }`}
+                } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-95'}`}
               >
                 <div className={`rounded-full border border-white/40 flex items-center justify-center font-mono-numbers font-black ${
                   isLandscapeActive ? 'w-5 h-5 sm:w-6 sm:h-6 text-[8px] sm:text-[9px]' : 'w-7 h-7 sm:w-8 sm:h-8 text-[10px] sm:text-xs'
@@ -1229,31 +1306,32 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={handleReBet}
-            disabled={phase !== 'BETTING'}
-            className={`rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-slate-200 cursor-pointer disabled:opacity-40 ${
+            disabled={isBetLocked}
+            className={`rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-slate-200 disabled:opacity-40 ${
               isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-            }`}
+            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           >
             ⟲ Cược Lại
           </button>
           <button
             onClick={handleDoubleBet}
-            disabled={phase !== 'BETTING' || totalUserBet === 0}
-            className={`rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-amber-300 cursor-pointer disabled:opacity-40 ${
+            disabled={isBetLocked || totalUserBet === 0}
+            className={`rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-amber-300 disabled:opacity-40 ${
               isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-            }`}
+            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           >
             ✖2 Gấp Đôi
           </button>
           <button
             onClick={() => setSelectedChip(Math.max(10000, balance))}
-            className={`rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 font-black text-amber-300 cursor-pointer ${
+            disabled={isBetLocked}
+            className={`rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 font-black text-amber-300 disabled:opacity-40 ${
               isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-            }`}
+            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           >
             ⚡ Tất Tay
           </button>
-          {totalUserBet > 0 && phase === 'BETTING' && (
+          {totalUserBet > 0 && !isBetLocked && (
             <button
               onClick={clearBets}
               className={`rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/50 font-bold text-red-300 cursor-pointer ${

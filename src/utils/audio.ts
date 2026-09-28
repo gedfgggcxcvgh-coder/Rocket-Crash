@@ -358,26 +358,72 @@ class SoundSystem {
     } catch {}
   }
 
-  public playDiceShake() {
+  public playDiceShake(duration: number = 2.8) {
     if (this.isMuted) return;
     try {
       this.initCtx();
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
-      // Synthesize wooden/ceramic rattling dice clicks
-      for (let i = 0; i < 7; i++) {
+      // Synthesize realistic tumbling dice clicks building tension
+      const clickCount = Math.floor(duration * 12);
+      for (let i = 0; i < clickCount; i++) {
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        const clickTime = now + (i * 0.08) + (Math.random() * 0.03);
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(350 + Math.random() * 400, clickTime);
-        gain.gain.setValueAtTime(0.15, clickTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.04);
+        const clickTime = now + (i * 0.07) + (Math.random() * 0.02);
+        osc.type = Math.random() > 0.5 ? 'triangle' : 'sine';
+        // Random frequencies for 3 colliding dice
+        osc.frequency.setValueAtTime(450 + Math.random() * 650, clickTime);
+        osc.frequency.exponentialRampToValueAtTime(200, clickTime + 0.035);
+        
+        const vol = 0.08 + Math.random() * 0.12;
+        gain.gain.setValueAtTime(vol, clickTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, clickTime + 0.035);
+        
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(clickTime);
-        osc.stop(clickTime + 0.05);
+        osc.stop(clickTime + 0.04);
       }
+
+      // Conclude with solid ceramic bowl slam on table felt
+      setTimeout(() => {
+        this.playBowlSlam();
+      }, (duration - 0.25) * 1000);
+    } catch {}
+  }
+
+  public playBowlSlam() {
+    if (this.isMuted) return;
+    try {
+      this.initCtx();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      
+      // Low solid thump (table impact)
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'sine';
+      subOsc.frequency.setValueAtTime(95, now);
+      subOsc.frequency.exponentialRampToValueAtTime(32, now + 0.18);
+      subGain.gain.setValueAtTime(0.35, now);
+      subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+      subOsc.connect(subGain);
+      subGain.connect(this.ctx.destination);
+      subOsc.start(now);
+      subOsc.stop(now + 0.22);
+
+      // Ceramic clink on plate
+      const clinkOsc = this.ctx.createOscillator();
+      const clinkGain = this.ctx.createGain();
+      clinkOsc.type = 'triangle';
+      clinkOsc.frequency.setValueAtTime(820, now);
+      clinkOsc.frequency.exponentialRampToValueAtTime(280, now + 0.08);
+      clinkGain.gain.setValueAtTime(0.2, now);
+      clinkGain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      clinkOsc.connect(clinkGain);
+      clinkGain.connect(this.ctx.destination);
+      clinkOsc.start(now);
+      clinkOsc.stop(now + 0.1);
     } catch {}
   }
 
@@ -411,20 +457,20 @@ class SoundSystem {
       this.initCtx();
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
-      const notes = [523.25, 659.25, 783.99, 1046.5]; // C5, E5, G5, C6
+      const notes = [523.25, 659.25, 783.99, 1046.5, 1318.5]; // C5, E5, G5, C6, E6
       notes.forEach((freq, idx) => {
         if (!this.ctx) return;
         const osc = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
-        const t = now + idx * 0.07;
+        const t = now + idx * 0.06;
         osc.type = 'sine';
         osc.frequency.setValueAtTime(freq, t);
         gain.gain.setValueAtTime(0.18, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(t);
-        osc.stop(t + 0.3);
+        osc.stop(t + 0.35);
       });
     } catch {}
   }
@@ -435,17 +481,31 @@ class SoundSystem {
       this.initCtx();
       if (!this.ctx) return;
       const now = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(2400 + Math.random() * 600, now);
-      osc.frequency.exponentialRampToValueAtTime(1200, now + 0.06);
-      gain.gain.setValueAtTime(0.2, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
-      osc.connect(gain);
-      gain.connect(this.ctx.destination);
-      osc.start(now);
-      osc.stop(now + 0.09);
+      
+      // Dual-frequency clay chip resonance
+      const baseFreq = 2600 + Math.random() * 400;
+      const osc1 = this.ctx.createOscillator();
+      const gain1 = this.ctx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(baseFreq, now);
+      osc1.frequency.exponentialRampToValueAtTime(1400, now + 0.05);
+      gain1.gain.setValueAtTime(0.18, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+      osc1.connect(gain1);
+      gain1.connect(this.ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.07);
+
+      const osc2 = this.ctx.createOscillator();
+      const gain2 = this.ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(baseFreq * 1.45, now);
+      gain2.gain.setValueAtTime(0.12, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+      osc2.connect(gain2);
+      gain2.connect(this.ctx.destination);
+      osc2.start(now);
+      osc2.stop(now + 0.05);
     } catch {}
   }
 
@@ -458,14 +518,14 @@ class SoundSystem {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
-      osc.frequency.setValueAtTime(180, now);
-      osc.frequency.exponentialRampToValueAtTime(320, now + 0.12);
-      gain.gain.setValueAtTime(0.12, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+      osc.frequency.setValueAtTime(220, now);
+      osc.frequency.exponentialRampToValueAtTime(380, now + 0.1);
+      gain.gain.setValueAtTime(0.09, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.16);
+      osc.stop(now + 0.13);
     } catch {}
   }
 }
