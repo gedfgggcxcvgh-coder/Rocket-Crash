@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock } from 'lucide-react';
+import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock, Menu } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sounds } from '../utils/audio';
 import { Real3DDice } from './Real3DDice';
 import { ChatMessage } from '../types/game';
+import { GameHubModal } from './GameHubModal';
 
 export type ComCutBetType = 'COM' | 'CUT' | 'BAO_COM' | 'BAO_CUT' | 'COM_GA' | 'CUT_RUOI';
 
@@ -32,6 +33,8 @@ interface ComVaCutGameProps {
   isMuted: boolean;
   messages?: ChatMessage[];
   onSendMessage?: (text: string) => void;
+  onOpenGameHub?: () => void;
+  onSwitchGame?: (game: 'ROCKET' | 'COM_CUT') => void;
 }
 
 const CHIP_DENOMINATIONS = [
@@ -58,7 +61,12 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   isMuted,
   messages = [],
   onSendMessage,
+  onOpenGameHub,
+  onSwitchGame,
 }) => {
+  // Game Hub Switcher Modal State
+  const [showGameHub, setShowGameHub] = useState<boolean>(false);
+
   // Mini Floating Chat State (Available in both Landscape & Portrait)
   const [showMiniChat, setShowMiniChat] = useState<boolean>(false);
   const [miniChatInput, setMiniChatInput] = useState<string>('');
@@ -613,6 +621,34 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }
   };
 
+  const handleAllIn = () => {
+    if (isBetLocked) {
+      sounds.playErrorBeep();
+      setScoreNotification({
+        text: '🔒 Hệ thống đã khóa cược! Vui lòng chờ phiên sau',
+        positive: false,
+      });
+      setTimeout(() => setScoreNotification(null), 2000);
+      return;
+    }
+    if (balance <= 0) {
+      sounds.playErrorBeep();
+      setScoreNotification({
+        text: 'Số dư 0 Xu! Hãy nạp thêm Xu',
+        positive: false,
+      });
+      setTimeout(() => setScoreNotification(null), 2000);
+      return;
+    }
+    sounds.playChipClink();
+    setSelectedChip(balance);
+    setScoreNotification({
+      text: `⚡ Mức cược TẤT TAY: ${balance.toLocaleString('vi-VN')} Xu! Hãy chọn Cơm hoặc Cứt.`,
+      positive: true,
+    });
+    setTimeout(() => setScoreNotification(null), 2500);
+  };
+
   const totalUserBet = Object.values(userBets).reduce((a, b) => a + b, 0);
   const currentTotalDice = dices[0] + dices[1] + dices[2];
   return (
@@ -647,8 +683,23 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       <div className={`flex flex-wrap items-center justify-between gap-1.5 bg-gradient-to-r from-amber-950/80 via-slate-900/95 to-yellow-950/80 border border-amber-500/40 rounded-xl sm:rounded-2xl shadow-xl backdrop-blur-md shrink-0 ${
         isLandscapeActive ? 'p-1 px-2.5' : 'p-2 sm:p-2.5 px-3 sm:px-4'
       }`}>
-        <div className="flex items-center gap-2">
-          <div className={`${isLandscapeActive ? 'w-6 h-6 text-sm' : 'w-8 h-8 sm:w-9 sm:h-9 text-lg'} rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 p-0.5 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black`}>
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* NÚT 3 GẠCH ☰ ĐỔI GAME */}
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playClick();
+              if (onOpenGameHub) onOpenGameHub();
+              else setShowGameHub(true);
+            }}
+            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
+            title="Nhấn để đổi game khác (Game Hub)"
+          >
+            <Menu className="w-3.5 h-3.5 text-amber-400" />
+            <span className="text-[11px] sm:text-xs text-amber-300">Đổi Game</span>
+          </button>
+
+          <div className={`${isLandscapeActive ? 'w-6 h-6 text-sm' : 'w-8 h-8 sm:w-9 sm:h-9 text-lg'} rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 p-0.5 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black shrink-0`}>
             🍚
           </div>
           <div>
@@ -1267,13 +1318,56 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       </div>
 
       {/* ============================================================== */}
-      {/* 4. DẢI CHIP CASINO & NÚT TIỆN ÍCH DÀN HÀNG NGANG */}
+      {/* 4. DẢI CHIP CASINO & THANH THAO TÁC CƯỢC CHUẨN CASINO */}
       {/* ============================================================== */}
-      <div className={`bg-slate-900/90 border border-slate-800 rounded-xl sm:rounded-2xl flex flex-wrap items-center justify-between gap-1 shadow-lg shrink-0 ${
-        isLandscapeActive ? 'p-1 px-2' : 'p-2 sm:p-2.5'
-      } ${isBetLocked ? 'opacity-70' : ''}`}>
-        {/* Chip Denominations */}
-        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto scrollbar-none py-0.5">
+      <div className={`bg-slate-900/95 border border-slate-800 rounded-xl sm:rounded-2xl p-1.5 sm:p-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 shadow-xl shrink-0 ${isBetLocked ? 'opacity-70' : ''}`}>
+        {/* Nhóm nút thao tác: Cược Lại, Gấp Đôi, Hủy Cược */}
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={handleReBet}
+            disabled={isBetLocked}
+            className={`flex items-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-slate-200 px-2 sm:px-2.5 py-1 sm:py-1.5 ${
+              isLandscapeActive ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs'
+            } disabled:opacity-40 transition-all ${
+              isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-95'
+            }`}
+            title="Đặt lại mức cược phiên trước"
+          >
+            <span>⟲</span>
+            <span>Cược Lại</span>
+          </button>
+          <button
+            onClick={handleDoubleBet}
+            disabled={isBetLocked || totalUserBet === 0}
+            className={`flex items-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-amber-300 px-2 sm:px-2.5 py-1 sm:py-1.5 ${
+              isLandscapeActive ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs'
+            } disabled:opacity-40 transition-all ${
+              isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-95'
+            }`}
+            title="Gấp đôi tổng cược hiện tại"
+          >
+            <span>✖2</span>
+            <span>Gấp Đôi</span>
+          </button>
+          {totalUserBet > 0 && !isBetLocked && (
+            <button
+              onClick={clearBets}
+              className={`flex items-center gap-1 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/50 font-bold text-red-300 px-2 sm:px-2.5 py-1 sm:py-1.5 ${
+                isLandscapeActive ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs'
+              } cursor-pointer active:scale-95 transition-all`}
+              title="Hủy toàn bộ cược phiên này"
+            >
+              <span>✕</span>
+              <span>Hủy</span>
+            </button>
+          )}
+        </div>
+
+        {/* Vách ngăn */}
+        <div className="hidden sm:block w-[1px] h-7 bg-slate-800 shrink-0 mx-0.5" />
+
+        {/* Dải Chip + Nút Tất Tay ngay cạnh dải chip */}
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto scrollbar-none py-0.5 ml-auto">
           {CHIP_DENOMINATIONS.map((chip) => {
             const isSelected = selectedChip === chip.value;
             return (
@@ -1285,62 +1379,38 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                   setSelectedChip(chip.value);
                 }}
                 className={`relative rounded-full flex flex-col items-center justify-center border-2 border-dashed shadow-md transition-all shrink-0 ${
-                  isLandscapeActive ? 'w-7 h-7 sm:w-8 sm:h-8' : 'w-10 h-10 sm:w-12 sm:h-12'
+                  isLandscapeActive ? 'w-7 h-7 sm:w-8 sm:h-8' : 'w-8 h-8 sm:w-10 sm:h-10'
                 } ${chip.color} ${
                   isSelected
-                    ? `scale-110 -translate-y-0.5 ring-2 sm:ring-3 ${chip.ring} brightness-110`
+                    ? `scale-110 -translate-y-0.5 ring-3 ${chip.ring} brightness-110 shadow-lg`
                     : 'opacity-85 hover:opacity-100'
                 } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-95'}`}
               >
                 <div className={`rounded-full border border-white/40 flex items-center justify-center font-mono-numbers font-black ${
-                  isLandscapeActive ? 'w-5 h-5 sm:w-6 sm:h-6 text-[8px] sm:text-[9px]' : 'w-7 h-7 sm:w-8 sm:h-8 text-[10px] sm:text-xs'
+                  isLandscapeActive ? 'w-5 h-5 sm:w-6 sm:h-6 text-[8px] sm:text-[9px]' : 'w-6 h-6 sm:w-7 sm:h-7 text-[9px] sm:text-[11px]'
                 }`}>
                   {chip.label}
                 </div>
               </button>
             );
           })}
-        </div>
 
-        {/* Casino Action buttons */}
-        <div className="flex items-center gap-1 shrink-0">
+          {/* Nút TẤT TAY đặt ngay cạnh các chip chọn tiền */}
           <button
-            onClick={handleReBet}
-            disabled={isBetLocked}
-            className={`rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-slate-200 disabled:opacity-40 ${
-              isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+            onClick={handleAllIn}
+            disabled={isBetLocked || balance <= 0}
+            className={`relative rounded-full sm:rounded-xl flex items-center justify-center border-2 border-amber-400 bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 text-slate-950 font-black shadow-lg shadow-amber-500/30 transition-all shrink-0 disabled:opacity-40 ${
+              isLandscapeActive ? 'px-2 py-0.5 text-[9px] h-7 sm:h-8' : 'px-2.5 sm:px-3 py-1 text-[10px] sm:text-xs h-8 sm:h-10'
+            } ${
+              selectedChip === balance && balance > 0
+                ? 'ring-3 ring-yellow-300 scale-105 brightness-110'
+                : 'hover:brightness-110'
+            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
+            title="Cược tất tay toàn bộ số dư"
           >
-            ⟲ Cược Lại
+            <span className="mr-0.5 text-xs">⚡</span>
+            <span className="font-black uppercase tracking-wider">Tất Tay</span>
           </button>
-          <button
-            onClick={handleDoubleBet}
-            disabled={isBetLocked || totalUserBet === 0}
-            className={`rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-amber-300 disabled:opacity-40 ${
-              isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            ✖2 Gấp Đôi
-          </button>
-          <button
-            onClick={() => setSelectedChip(Math.max(10000, balance))}
-            disabled={isBetLocked}
-            className={`rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 font-black text-amber-300 disabled:opacity-40 ${
-              isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-            } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
-          >
-            ⚡ Tất Tay
-          </button>
-          {totalUserBet > 0 && !isBetLocked && (
-            <button
-              onClick={clearBets}
-              className={`rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/50 font-bold text-red-300 cursor-pointer ${
-                isLandscapeActive ? 'px-1.5 py-0.5 text-[9px]' : 'px-2 py-1 text-[11px]'
-              }`}
-            >
-              ✕ Hủy
-            </button>
-          )}
         </div>
       </div>
 
@@ -1373,20 +1443,37 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
       {/* RULES MODAL */}
       {showRulesModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 max-w-md w-full shadow-2xl flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-black text-white text-base flex items-center gap-2">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowRulesModal(false);
+          }}
+          className="fixed inset-0 z-[10002] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none animate-in fade-in duration-200"
+        >
+          {/* Quick exit pill button at top right */}
+          <button
+            onClick={() => setShowRulesModal(false)}
+            className="absolute top-2 right-2 sm:top-3 sm:right-3 z-50 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-rose-900/80 border border-slate-600 hover:border-rose-400 text-white font-bold text-xs flex items-center gap-1 shadow-2xl cursor-pointer active:scale-95 transition-all"
+          >
+            ✕ Thoát
+          </button>
+
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl p-3 sm:p-5 max-w-md w-full max-h-[88vh] shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+              <h3 className="font-black text-white text-sm sm:text-base flex items-center gap-2">
                 <span>📖</span> Luật Chơi Cơm Hay Cứt (Sicbo)
               </h3>
               <button
                 onClick={() => setShowRulesModal(false)}
-                className="text-slate-400 hover:text-white font-bold p-1 cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-900/80 border border-slate-700 hover:border-rose-400 text-slate-300 hover:text-white font-black text-sm flex items-center justify-center cursor-pointer active:scale-90 transition-all shrink-0"
+                title="Đóng luật chơi"
               >
                 ✕
               </button>
             </div>
-            <div className="text-xs text-slate-300 space-y-2 leading-relaxed">
+
+            {/* Modal Body - Scrollable */}
+            <div className="flex-1 min-h-0 overflow-y-auto text-xs text-slate-300 space-y-2 leading-relaxed py-2.5 pr-1 scrollbar-thin scrollbar-thumb-slate-700">
               <p>
                 Trò chơi sử dụng <strong>3 viên xí ngầu xúc xắc</strong> điểm từ 1 đến 6:
               </p>
@@ -1417,46 +1504,71 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                 💡 <em>Dùng chung ví Xu và tài khoản Discord với Rocket Crash.</em>
               </div>
             </div>
-            <button
-              onClick={() => setShowRulesModal(false)}
-              className="w-full py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs cursor-pointer"
-            >
-              ĐÃ HIỂU
-            </button>
+
+            {/* Modal Footer */}
+            <div className="pt-2 border-t border-slate-800 shrink-0">
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs cursor-pointer active:scale-98 transition-all shadow-lg"
+              >
+                ✕ ĐÃ HIỂU - ĐÓNG BẢNG
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* HISTORY / SOI CẦU MODAL */}
       {showHistoryModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 max-w-lg w-full shadow-2xl flex flex-col gap-3">
-            <div className="flex items-center justify-between">
-              <h3 className="font-black text-white text-base flex items-center gap-2">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowHistoryModal(false);
+          }}
+          className="fixed inset-0 z-[10002] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 select-none animate-in fade-in duration-200"
+        >
+          {/* Quick exit pill button at top right */}
+          <button
+            onClick={() => setShowHistoryModal(false)}
+            className="absolute top-2 right-2 sm:top-3 sm:right-3 z-50 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-rose-900/80 border border-slate-600 hover:border-rose-400 text-white font-bold text-xs flex items-center gap-1 shadow-2xl cursor-pointer active:scale-95 transition-all"
+          >
+            ✕ Thoát
+          </button>
+
+          <div className="bg-slate-900 border border-slate-700/80 rounded-2xl sm:rounded-3xl p-3 sm:p-5 max-w-lg w-full max-h-[88vh] shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800 shrink-0">
+              <h3 className="font-black text-white text-sm sm:text-base flex items-center gap-2">
                 <span>📊</span> Lịch Sử Soi Cầu Cơm & Cứt
               </h3>
               <button
                 onClick={() => setShowHistoryModal(false)}
-                className="text-slate-400 hover:text-white font-bold p-1 cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-900/80 border border-slate-700 hover:border-rose-400 text-slate-300 hover:text-white font-black text-sm flex items-center justify-center cursor-pointer active:scale-90 transition-all shrink-0"
+                title="Đóng bảng soi cầu"
               >
                 ✕
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30">
-                <span className="text-2xl">🍚</span>
-                <div className="text-lg font-black text-amber-400 font-mono-numbers">{comPercent}%</div>
-                <span className="text-xs text-slate-400">CƠM ({comCount} phiên)</span>
+            {/* Modal Stats - Compact */}
+            <div className="grid grid-cols-2 gap-2 text-center py-2 shrink-0">
+              <div className="p-2 sm:p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center gap-2 sm:flex-col sm:gap-0.5">
+                <span className="text-xl sm:text-2xl">🍚</span>
+                <div>
+                  <div className="text-base sm:text-lg font-black text-amber-400 font-mono-numbers">{comPercent}%</div>
+                  <span className="text-[10px] sm:text-xs text-slate-400">CƠM ({comCount} phiên)</span>
+                </div>
               </div>
-              <div className="p-3 rounded-2xl bg-yellow-950/60 border border-yellow-700/40">
-                <span className="text-2xl">💩</span>
-                <div className="text-lg font-black text-yellow-500 font-mono-numbers">{cutPercent}%</div>
-                <span className="text-xs text-slate-400">CỨT ({cutCount} phiên)</span>
+              <div className="p-2 sm:p-2.5 rounded-xl bg-yellow-950/60 border border-yellow-700/40 flex items-center justify-center gap-2 sm:flex-col sm:gap-0.5">
+                <span className="text-xl sm:text-2xl">💩</span>
+                <div>
+                  <div className="text-base sm:text-lg font-black text-yellow-500 font-mono-numbers">{cutPercent}%</div>
+                  <span className="text-[10px] sm:text-xs text-slate-400">CỨT ({cutCount} phiên)</span>
+                </div>
               </div>
             </div>
 
-            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1">
+            {/* Modal Body - Scrollable list */}
+            <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1 py-1 scrollbar-thin scrollbar-thumb-slate-700">
               {history.map((item) => (
                 <div
                   key={item.id}
@@ -1480,42 +1592,24 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               ))}
             </div>
 
-            <button
-              onClick={() => setShowHistoryModal(false)}
-              className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs cursor-pointer"
-            >
-              ĐÓNG
-            </button>
+            {/* Modal Footer */}
+            <div className="pt-2 border-t border-slate-800 shrink-0">
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs cursor-pointer active:scale-98 transition-all"
+              >
+                ✕ ĐÓNG BẢNG LỊCH SỬ
+              </button>
+            </div>
           </div>
         </div>
       )}
 
       {/* ============================================================== */}
-      {/* FLOATING MINI CHAT (CỬA SỔ CHAT NỔI NHỎ CHUẨN CASINO GO88/SUNWIN) */}
+      {/* CỬA SỔ CHAT NỔI NHỎ TRỰC TIẾP (BẬT/TẮT QUA NÚT CHAT Ở THANH MENU TRÊN) */}
       {/* ============================================================== */}
-      {/* 1. Nút bong bóng chat nổi tròn ở góc dưới bên phải */}
-      {!showMiniChat && (
-        <button
-          onClick={() => {
-            sounds.playClick();
-            setShowMiniChat(true);
-            setUnreadChatCount(0);
-          }}
-          className="fixed bottom-3 right-3 sm:bottom-4 sm:right-4 z-40 w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-gradient-to-tr from-indigo-600 via-indigo-500 to-amber-400 text-white shadow-[0_4px_25px_rgba(99,102,241,0.55)] border-2 border-white/70 flex items-center justify-center cursor-pointer active:scale-90 hover:scale-105 transition-all group"
-          title="Mở chat phòng nổi"
-        >
-          <MessageSquare className="w-5 h-5 text-white" />
-          {unreadChatCount > 0 && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-rose-600 border border-white text-white text-[9px] font-black flex items-center justify-center animate-bounce shadow-md">
-              {unreadChatCount}
-            </span>
-          )}
-        </button>
-      )}
-
-      {/* 2. Cửa sổ chat nổi nhỏ có thể gõ và tương tác */}
       {showMiniChat && (
-        <div className="fixed bottom-2 right-2 sm:bottom-4 sm:right-4 z-[10001] w-72 sm:w-80 h-[270px] xs:h-[310px] bg-slate-950/95 backdrop-blur-xl border-2 border-amber-500/60 rounded-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200 select-text">
+        <div className="fixed bottom-2 right-2 sm:bottom-4 sm:right-4 z-[10001] w-72 sm:w-80 max-h-[82vh] h-[260px] xs:h-[300px] bg-slate-950/95 backdrop-blur-xl border-2 border-amber-500/60 rounded-2xl shadow-[0_12px_45px_rgba(0,0,0,0.85)] flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200 select-text">
           {/* Mini Chat Header */}
           <div className="flex items-center justify-between p-2 px-3 bg-gradient-to-r from-amber-950/80 via-slate-900 to-slate-950 border-b border-amber-500/30 shrink-0">
             <div className="flex items-center gap-1.5">
@@ -1532,7 +1626,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             </div>
             <button
               onClick={() => setShowMiniChat(false)}
-              className="w-5 h-5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer transition-colors"
+              className="w-6 h-6 rounded-lg bg-slate-800 hover:bg-rose-900/80 border border-slate-700 hover:border-rose-400 text-slate-300 hover:text-white flex items-center justify-center text-xs font-black cursor-pointer active:scale-90 transition-all shrink-0"
               title="Thu nhỏ chat"
             >
               <X className="w-3.5 h-3.5" />
@@ -1597,6 +1691,18 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           </form>
         </div>
       )}
+
+      {/* GAME HUB MODAL (CHỌN GAME) */}
+      <GameHubModal
+        isOpen={showGameHub}
+        onClose={() => setShowGameHub(false)}
+        activeGame="COM_CUT"
+        onSelectGame={(selected) => {
+          if (onSwitchGame) onSwitchGame(selected);
+          setShowGameHub(false);
+        }}
+        balance={balance}
+      />
     </div>
   );
 };

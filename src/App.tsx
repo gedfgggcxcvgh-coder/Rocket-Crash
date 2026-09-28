@@ -24,6 +24,7 @@ import { DuelModal } from './components/DuelModal';
 import { DuelBanner } from './components/DuelBanner';
 import { DuelResultModal } from './components/DuelResultModal';
 import { ComVaCutGame } from './components/ComVaCutGame';
+import { GameHubModal } from './components/GameHubModal';
 import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
 import { getSkinById } from './utils/skins';
 import confetti from 'canvas-confetti';
@@ -154,6 +155,7 @@ export default function App() {
   const [autoCashoutTarget2, setAutoCashoutTarget2] = useState<number>(10.0);
 
   // New Modals & Feature States
+  const [showGameHubModal, setShowGameHubModal] = useState<boolean>(false);
   const [showGarageModal, setShowGarageModal] = useState<boolean>(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState<boolean>(false);
   const [showDuelModal, setShowDuelModal] = useState<boolean>(false);
@@ -1563,45 +1565,30 @@ export default function App() {
       <header className="w-full border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-[1440px] mx-auto px-3 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveGame('ROCKET')}>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399] animate-pulse" />
-              <span className="text-base sm:text-lg font-black tracking-tight text-white font-display flex items-center gap-1">
-                GAME HUB
-              </span>
-            </div>
-
-            {/* Game Switcher Tabs */}
-            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 sm:p-1 shadow-inner">
-              <button
-                type="button"
-                onClick={() => setActiveGame('ROCKET')}
-                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                  activeGame === 'ROCKET'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/25 scale-[1.02]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Chơi Rocket Crash (Tên Lửa)"
-              >
-                <span>🚀</span>
-                <span className="hidden xs:inline">Tên Lửa</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveGame('COM_CUT')}
-                className={`relative flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                  activeGame === 'COM_CUT'
-                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md shadow-amber-500/25 scale-[1.02]'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-                title="Chơi Cơm Hay Cứt (Tài Xỉu Meme)"
-              >
-                <span>🍚💩</span>
-                <span>Cơm & Cứt</span>
-                <span className="hidden sm:inline-block text-[9px] bg-red-500 text-white px-1 py-0.2 rounded font-black animate-pulse">
-                  HOT
+            {/* 3-BAR GAME SWITCHER BUTTON (☰ CHỌN GAME) */}
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playClick();
+                setShowGameHubModal(true);
+              }}
+              className="flex items-center gap-2 px-2.5 sm:px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border border-amber-500/50 hover:border-amber-400 text-white font-bold transition-all shadow-md active:scale-95 cursor-pointer group shrink-0"
+              title="Nhấn vào biểu tượng 3 gạch để chọn game"
+            >
+              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform shrink-0">
+                <Menu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+              </div>
+              <div className="flex flex-col text-left leading-none">
+                <span className="text-[9px] text-amber-400 font-black uppercase tracking-wider flex items-center gap-1">
+                  <span>Chọn Game</span>
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
                 </span>
-              </button>
-            </div>
+                <span className="font-black text-xs sm:text-sm text-white flex items-center gap-1 mt-0.5">
+                  <span>{activeGame === 'ROCKET' ? '🚀 Tên Lửa Crash' : '🍚 Cơm Hay Cứt'}</span>
+                  <span className="text-[9px] text-slate-400">▼</span>
+                </span>
+              </div>
+            </button>
           </div>
 
           <nav className="hidden lg:flex items-center gap-4 text-xs font-bold text-slate-300">
@@ -1732,31 +1719,22 @@ export default function App() {
         {showMobileMenu && (
           <div className="lg:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-2xl p-3 px-4 flex flex-col gap-2.5 animate-in slide-in-from-top-2 duration-150 shadow-2xl">
             {/* Mobile Game Switcher Banner */}
-            <div className="p-1 rounded-2xl bg-slate-900 border border-slate-800 grid grid-cols-2 gap-1">
+            <div className="p-1.5 rounded-2xl bg-slate-900 border border-slate-800 flex flex-col gap-1.5">
               <button
                 type="button"
-                onClick={() => { setActiveGame('ROCKET'); setShowMobileMenu(false); }}
-                className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  activeGame === 'ROCKET'
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md font-black'
-                    : 'text-slate-400 hover:text-white'
-                }`}
+                onClick={() => {
+                  setShowMobileMenu(false);
+                  setShowGameHubModal(true);
+                }}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-amber-500/20 via-yellow-500/20 to-amber-500/20 border border-amber-500/50 text-amber-300 font-black text-xs flex items-center justify-between shadow-sm cursor-pointer active:scale-95 transition-all"
               >
-                <span>🚀</span>
-                <span>Tên Lửa Crash</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => { setActiveGame('COM_CUT'); setShowMobileMenu(false); }}
-                className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  activeGame === 'COM_CUT'
-                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md font-black'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <span>🍚💩</span>
-                <span>Cơm & Cứt</span>
-                <span className="text-[9px] bg-red-500 text-white px-1 py-0.2 rounded font-black">HOT</span>
+                <div className="flex items-center gap-2">
+                  <Menu className="w-4 h-4 text-amber-400" />
+                  <span>MENU CHỌN GAME (GAME HUB)</span>
+                </div>
+                <span className="text-[10px] bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full font-black">
+                  {activeGame === 'ROCKET' ? '🚀 Tên Lửa' : '🍚 Cơm Cứt'}
+                </span>
               </button>
             </div>
 
@@ -1851,6 +1829,8 @@ export default function App() {
               isMuted={isMuted}
               messages={messages}
               onSendMessage={handleSendMessage}
+              onOpenGameHub={() => setShowGameHubModal(true)}
+              onSwitchGame={(selectedGame) => setActiveGame(selectedGame)}
             />
             {/* Community Chat under the landscape table */}
             <div className="max-w-4xl mx-auto w-full">
@@ -2017,6 +1997,15 @@ export default function App() {
       <RulesModal
         isOpen={showRulesModal}
         onClose={() => setShowRulesModal(false)}
+      />
+
+      {/* GAME HUB MODAL (CHỌN GAME 3 GẠCH) */}
+      <GameHubModal
+        isOpen={showGameHubModal}
+        onClose={() => setShowGameHubModal(false)}
+        activeGame={activeGame}
+        onSelectGame={(g) => setActiveGame(g)}
+        balance={balance}
       />
     </div>
   );

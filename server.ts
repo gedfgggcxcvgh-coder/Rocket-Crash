@@ -844,15 +844,44 @@ async function startServer() {
 
   // Vite Dev Server middleware or production static serving
   const distPath = path.join(__dirname, 'dist');
-  const hasBuiltDist = fs.existsSync(path.join(distPath, 'index.html'));
-  const isProduction = process.env.NODE_ENV === 'production' || hasBuiltDist;
+  const indexHtmlPath = path.join(distPath, 'index.html');
+  const isProduction = process.env.NODE_ENV === 'production';
 
   if (isProduction) {
-    app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    // If in production mode but dist/index.html is missing, build it automatically
+    if (!fs.existsSync(indexHtmlPath)) {
+      try {
+        console.log('⚡ Production mode: dist/index.html not found. Building assets...');
+        const { execSync } = await import('node:child_process');
+        execSync('npx vite build', { stdio: 'inherit' });
+      } catch (buildErr) {
+        console.error('❌ Failed to run vite build:', buildErr);
+      }
+    }
+
+    if (fs.existsSync(indexHtmlPath)) {
+      app.use(express.static(distPath));
+      app.get('*', (req, res, next) => {
+        if (req.path.startsWith('/api') || req.path.startsWith('/health')) {
+          return next();
+        }
+        res.sendFile(indexHtmlPath, (err) => {
+          if (err && !res.headersSent) {
+            console.error('Error serving index.html:', err);
+            res.status(500).send('Application loading error. Please refresh.');
+          }
+        });
+      });
+    } else {
+      // Fallback to Vite server middleware if dist build is unavailable
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    }
   } else {
+    // In development mode, ALWAYS mount Vite dev middleware for instant live compilation
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
