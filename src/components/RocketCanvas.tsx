@@ -1551,25 +1551,18 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
               </div>
             )}
 
-            {/* Prominent, unambiguous celebration badge when user has cashed out */}
+            {/* Small compact pill celebration badge when user has cashed out */}
             {userCashedOut && (
-              <div className="mt-2.5 sm:mt-3 py-2 px-4 sm:px-6 rounded-2xl bg-emerald-950/95 border-2 border-emerald-400 text-emerald-300 flex flex-col items-center gap-1 shadow-2xl shadow-emerald-500/30 animate-in zoom-in-95">
-                <div className="flex items-center gap-2 text-xs sm:text-sm font-black text-emerald-400">
-                  <span>✨ BẠN ĐÃ CHỐT LÃI THÀNH CÔNG!</span>
-                  {userCashoutMultiplier && (
-                    <span className="font-mono-numbers bg-emerald-500/20 px-2 py-0.5 rounded border border-emerald-400/40">
-                      {userCashoutMultiplier.toFixed(2)}x
-                    </span>
-                  )}
-                </div>
-                <div className="font-mono-numbers text-base sm:text-xl font-black text-white">
-                  +{((cashedOutWonAmount || (userCashoutMultiplier ? Math.floor(userBet * userCashoutMultiplier) : 0))).toLocaleString('vi-VN')} Xu
-                </div>
-                <div className="text-[10px] text-emerald-300/80 font-medium flex items-center gap-1.5">
-                  <span>✅ Tiền đã về ví an toàn</span>
-                  <span>•</span>
-                  <span className="opacity-75">Tên lửa tiếp tục bay cho phòng...</span>
-                </div>
+              <div className="mt-2.5 py-1 px-3.5 rounded-full bg-emerald-950/85 backdrop-blur-sm border border-emerald-500/40 text-emerald-300 text-xs font-semibold flex items-center gap-1.5 shadow-sm">
+                <span>✨ Đã chốt thành công tại</span>
+                {userCashoutMultiplier && (
+                  <span className="font-mono-numbers font-bold text-white">
+                    {userCashoutMultiplier.toFixed(2)}x
+                  </span>
+                )}
+                <span className="text-emerald-400 font-bold">
+                  (+{((cashedOutWonAmount || (userCashoutMultiplier ? Math.floor(userBet * userCashoutMultiplier) : 0))).toLocaleString('vi-VN')} Xu)
+                </span>
               </div>
             )}
           </div>
