@@ -213,6 +213,8 @@ async function startServer() {
         id: userId,
         username: username || 'Khách',
         balance: 1000000,
+        equippedSkin: 'STANDARD',
+        unlockedSkins: ['STANDARD'],
         stats: {
           totalGames: 0,
           wins: 0,
@@ -227,6 +229,12 @@ async function startServer() {
       } catch (err) {
         console.error('Failed to write user-database.json:', err);
       }
+    }
+    if (!userDatabase[userId].equippedSkin) {
+      userDatabase[userId].equippedSkin = 'STANDARD';
+    }
+    if (!Array.isArray(userDatabase[userId].unlockedSkins) || userDatabase[userId].unlockedSkins.length === 0) {
+      userDatabase[userId].unlockedSkins = ['STANDARD'];
     }
     return userDatabase[userId];
   }
@@ -435,6 +443,29 @@ async function startServer() {
     } catch {}
     broadcastGameState();
     res.json({ success: true, balance: record.balance });
+  });
+
+  // POST /api/user/skin - Save equipped skin and unlocked skins
+  app.post('/api/user/skin', (req, res) => {
+    const { userId, equippedSkin, unlockedSkins } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'Thiếu userId' });
+    }
+    const record = getUserRecord(userId);
+    if (equippedSkin) record.equippedSkin = equippedSkin;
+    if (Array.isArray(unlockedSkins) && unlockedSkins.length > 0) {
+      record.unlockedSkins = Array.from(new Set([...(record.unlockedSkins || []), ...unlockedSkins]));
+    }
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch (err) {
+      console.error('Failed to update skin in database:', err);
+    }
+    res.json({
+      success: true,
+      equippedSkin: record.equippedSkin,
+      unlockedSkins: record.unlockedSkins,
+    });
   });
 
   // POST /api/game/bet - Place a bet

@@ -102,8 +102,29 @@ export default function App() {
   const [showLeaderboardModal, setShowLeaderboardModal] = useState<boolean>(false);
   const [showDuelModal, setShowDuelModal] = useState<boolean>(false);
   const [showDuelResultModal, setShowDuelResultModal] = useState<boolean>(false);
-  const [equippedSkin, setEquippedSkin] = useState<RocketSkinId>('STANDARD');
-  const [unlockedSkins, setUnlockedSkins] = useState<RocketSkinId[]>(['STANDARD']);
+
+  const [equippedSkin, setEquippedSkin] = useState<RocketSkinId>(() => {
+    const savedDiscord = getSavedDiscordUser();
+    const guestId = typeof window !== 'undefined' ? (localStorage.getItem('rocket_crash_guest_id') || 'guest') : 'guest';
+    const uId = savedDiscord ? savedDiscord.id : guestId;
+    const saved = localStorage.getItem(`rocket_crash_equipped_skin_${uId}`) || localStorage.getItem('rocket_crash_equipped_skin');
+    return (saved as RocketSkinId) || 'STANDARD';
+  });
+
+  const [unlockedSkins, setUnlockedSkins] = useState<RocketSkinId[]>(() => {
+    const savedDiscord = getSavedDiscordUser();
+    const guestId = typeof window !== 'undefined' ? (localStorage.getItem('rocket_crash_guest_id') || 'guest') : 'guest';
+    const uId = savedDiscord ? savedDiscord.id : guestId;
+    const saved = localStorage.getItem(`rocket_crash_unlocked_skins_${uId}`) || localStorage.getItem('rocket_crash_unlocked_skins');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return ['STANDARD'];
+  });
+
   const [jackpotPool, setJackpotPool] = useState<number>(18500000);
   const [activeDuel, setActiveDuel] = useState<DuelState | null>(null);
   const [leaderboardItems, setLeaderboardItems] = useState<LeaderboardItem[]>([]);
@@ -144,7 +165,7 @@ export default function App() {
 
   const currentUserId = discordUser ? discordUser.id : getGuestUserId();
 
-  // On startup: Fetch fresh account balance and stats from central server for cross-device sync
+  // On startup & account change: Fetch fresh account balance, stats and skins from central server
   useEffect(() => {
     fetch(`/api/user/${currentUserId}`)
       .then(res => (res.ok ? res.json() : null))
@@ -153,6 +174,16 @@ export default function App() {
           setBalance(serverData.balance);
           if (serverData.stats) {
             setStats(prev => ({ ...prev, ...serverData.stats }));
+          }
+          if (serverData.equippedSkin) {
+            setEquippedSkin(serverData.equippedSkin);
+            localStorage.setItem(`rocket_crash_equipped_skin_${currentUserId}`, serverData.equippedSkin);
+            localStorage.setItem('rocket_crash_equipped_skin', serverData.equippedSkin);
+          }
+          if (Array.isArray(serverData.unlockedSkins) && serverData.unlockedSkins.length > 0) {
+            setUnlockedSkins(serverData.unlockedSkins);
+            localStorage.setItem(`rocket_crash_unlocked_skins_${currentUserId}`, JSON.stringify(serverData.unlockedSkins));
+            localStorage.setItem('rocket_crash_unlocked_skins', JSON.stringify(serverData.unlockedSkins));
           }
         }
       })
@@ -175,6 +206,12 @@ export default function App() {
         return;
       }
 
+      if (data.type === 'SYNC_SKIN_STATE' && data.userId === currentUserId) {
+        if (data.equippedSkin) setEquippedSkin(data.equippedSkin);
+        if (data.unlockedSkins) setUnlockedSkins(data.unlockedSkins);
+        return;
+      }
+
       if (data.tabId === TAB_ID || data.type !== 'SYNC_ACCOUNT_STATE') return;
 
       if (data.discordUser !== undefined) {
@@ -189,6 +226,14 @@ export default function App() {
         const newUser = getSavedDiscordUser();
         setDiscordUser(newUser);
       }
+      if (e.key === `rocket_crash_equipped_skin_${currentUserId}` || e.key === 'rocket_crash_equipped_skin') {
+        if (e.newValue) setEquippedSkin(e.newValue as RocketSkinId);
+      }
+      if (e.key === `rocket_crash_unlocked_skins_${currentUserId}` || e.key === 'rocket_crash_unlocked_skins') {
+        if (e.newValue) {
+          try { setUnlockedSkins(JSON.parse(e.newValue)); } catch {}
+        }
+      }
     };
 
     window.addEventListener('storage', handleStorage);
@@ -201,6 +246,12 @@ export default function App() {
             setBalance(serverData.balance);
             if (serverData.stats) {
               setStats(prev => ({ ...prev, ...serverData.stats }));
+            }
+            if (serverData.equippedSkin) {
+              setEquippedSkin(serverData.equippedSkin);
+            }
+            if (Array.isArray(serverData.unlockedSkins) && serverData.unlockedSkins.length > 0) {
+              setUnlockedSkins(serverData.unlockedSkins);
             }
           }
         })
@@ -1158,16 +1209,65 @@ export default function App() {
     }
   };
 
-  // Skin Management
+  // Skin Management with Account Persistence & Cross-Tab Sync
   const handleEquipSkin = (skinId: RocketSkinId) => {
     setEquippedSkin(skinId);
+
+    // Save locally
+    localStorage.setItem(`rocket_crash_equipped_skin_${currentUserId}`, skinId);
+    localStorage.setItem('rocket_crash_equipped_skin', skinId);
+
+    // Save to central user database on server
+    fetch('/api/user/skin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: currentUserId, equippedSkin: skinId }),
+    }).catch(() => {});
+
+    // Broadcast sync across tabs
+    syncChannel?.postMessage({
+      type: 'SYNC_SKIN_STATE',
+      userId: currentUserId,
+      tabId: TAB_ID,
+      equippedSkin: skinId,
+    });
   };
 
   const handleBuySkin = (skin: RocketSkin) => {
     if (balance < skin.price) return;
-    setBalance(prev => prev - skin.price);
-    setUnlockedSkins(prev => [...prev, skin.id]);
+
+    const nextUnlocked = Array.from(new Set([...unlockedSkins, skin.id]));
+    const nextBalance = balance - skin.price;
+
+    setBalance(nextBalance);
+    setUnlockedSkins(nextUnlocked);
     setEquippedSkin(skin.id);
+
+    // Save locally
+    localStorage.setItem(`rocket_crash_equipped_skin_${currentUserId}`, skin.id);
+    localStorage.setItem('rocket_crash_equipped_skin', skin.id);
+    localStorage.setItem(`rocket_crash_unlocked_skins_${currentUserId}`, JSON.stringify(nextUnlocked));
+    localStorage.setItem('rocket_crash_unlocked_skins', JSON.stringify(nextUnlocked));
+
+    // Save to central user database on server
+    fetch('/api/user/skin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: currentUserId,
+        equippedSkin: skin.id,
+        unlockedSkins: nextUnlocked,
+      }),
+    }).catch(() => {});
+
+    // Broadcast sync across tabs
+    syncChannel?.postMessage({
+      type: 'SYNC_SKIN_STATE',
+      userId: currentUserId,
+      tabId: TAB_ID,
+      equippedSkin: skin.id,
+      unlockedSkins: nextUnlocked,
+    });
   };
 
   // Free Faucet replenishment
