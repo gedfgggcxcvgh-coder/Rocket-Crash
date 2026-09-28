@@ -11,10 +11,17 @@ interface CommunityChatProps {
 export const CommunityChat: React.FC<CommunityChatProps> = ({ messages, onSendMessage }) => {
   const [inputText, setInputText] = useState('');
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const isNearBottomRef = useRef<boolean>(true);
+
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+      isNearBottomRef.current = scrollHeight - scrollTop - clientHeight < 70;
+    }
+  };
 
   useEffect(() => {
-    // Only scroll the internal chat container, never scroll the outer webpage/window
-    if (scrollContainerRef.current) {
+    if (scrollContainerRef.current && isNearBottomRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [messages]);
@@ -25,11 +32,23 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({ messages, onSendMe
     sounds.playClick();
     onSendMessage(inputText.trim());
     setInputText('');
+    isNearBottomRef.current = true;
+    setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    }, 50);
   };
 
   const handleQuickEmote = (emote: string) => {
     sounds.playClick();
     onSendMessage(emote);
+    isNearBottomRef.current = true;
+    setTimeout(() => {
+      if (scrollContainerRef.current) {
+        scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+      }
+    }, 50);
   };
 
   return (
@@ -55,7 +74,7 @@ export const CommunityChat: React.FC<CommunityChatProps> = ({ messages, onSendMe
       </div>
 
       {/* Message list */}
-      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto space-y-2 pr-1 text-xs">
         {messages.map(msg => (
           <div
             key={msg.id}

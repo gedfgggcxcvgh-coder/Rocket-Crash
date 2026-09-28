@@ -391,11 +391,28 @@ export default function App() {
             if (prevPhaseRef.current !== data.status) {
               if (data.status === 'FLYING') {
                 sounds.startEngine();
+                // Schedule surprise flight event if crash point > 1.8
+                if (data.crashPoint > 1.8 && Math.random() < 0.75) {
+                  const types: FlightEventType[] = ['WARP_NITRO', 'ALIEN_SHIELD', 'COSMIC_AIRDROP', 'ENGINE_OVERHEAT', 'LUCKY_ENVELOPE'];
+                  const selectedType = types[Math.floor(Math.random() * types.length)];
+                  const minTrig = 1.30;
+                  const maxTrig = Math.min(data.crashPoint - 0.2, 8.0);
+                  if (maxTrig > minTrig) {
+                    const triggerMult = parseFloat((Math.random() * (maxTrig - minTrig) + minTrig).toFixed(2));
+                    plannedEventRef.current = { triggered: false, triggerMult, type: selectedType };
+                  }
+                }
               } else if (data.status === 'CRASHED') {
                 sounds.stopEngine();
                 sounds.playExplosion();
+                plannedEventRef.current = null;
+                setActiveEvent(null);
+                activeEventRef.current = null;
               } else if (data.status === 'COUNTDOWN') {
                 sounds.playCountdownBeep(false);
+                plannedEventRef.current = null;
+                setActiveEvent(null);
+                activeEventRef.current = null;
               }
               prevPhaseRef.current = data.status;
             }
@@ -431,7 +448,24 @@ export default function App() {
       if (flightStartTimeMsRef.current > 0) {
         const elapsedSec = (Date.now() - flightStartTimeMsRef.current) / 1000;
         const currentMult = parseFloat(Math.max(1.00, Math.pow(Math.E, 0.06 * elapsedSec)).toFixed(2));
-        setMultiplier(prev => (currentMult > prev ? Math.min(currentMult, crashPoint) : prev));
+        const finalMult = Math.min(currentMult, crashPoint);
+        setMultiplier(prev => (finalMult > prev ? finalMult : prev));
+
+        // Trigger planned surprise flight event
+        if (
+          plannedEventRef.current &&
+          !plannedEventRef.current.triggered &&
+          finalMult >= plannedEventRef.current.triggerMult
+        ) {
+          plannedEventRef.current.triggered = true;
+          triggerFlightEvent(plannedEventRef.current.type, finalMult);
+        }
+
+        // Expire active event
+        if (activeEventRef.current && Date.now() >= activeEventRef.current.expiresAtTimestamp) {
+          setActiveEvent(null);
+          activeEventRef.current = null;
+        }
       }
       animFrame = requestAnimationFrame(updateSmoothMultiplier);
     };
