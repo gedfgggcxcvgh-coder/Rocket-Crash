@@ -21,6 +21,8 @@ import { RulesModal } from './components/RulesModal';
 import { RocketGarageModal } from './components/RocketGarageModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
 import { DuelModal } from './components/DuelModal';
+import { DuelBanner } from './components/DuelBanner';
+import { DuelResultModal } from './components/DuelResultModal';
 import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
 import { Volume2, VolumeX, Coins } from 'lucide-react';
 
@@ -98,6 +100,7 @@ export default function App() {
   const [showGarageModal, setShowGarageModal] = useState<boolean>(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState<boolean>(false);
   const [showDuelModal, setShowDuelModal] = useState<boolean>(false);
+  const [showDuelResultModal, setShowDuelResultModal] = useState<boolean>(false);
   const [equippedSkin, setEquippedSkin] = useState<RocketSkinId>('STANDARD');
   const [unlockedSkins, setUnlockedSkins] = useState<RocketSkinId[]>(['STANDARD']);
   const [jackpotPool, setJackpotPool] = useState<number>(18500000);
@@ -677,6 +680,121 @@ export default function App() {
     }
   }, [phase, userBet2, userCashedOut2, autoCashoutEnabled2, multiplier, autoCashoutTarget2]);
 
+  // 1v1 Solo Duel Live Engine
+  const prevRoundIdRef = useRef<string>('');
+  const duelResolvedRoundIdRef = useRef<string>('');
+
+  useEffect(() => {
+    if (!activeDuel || !activeDuel.active) return;
+
+    // New round starting in COUNTDOWN
+    if (phase === 'COUNTDOWN' && currentRoundId !== prevRoundIdRef.current) {
+      prevRoundIdRef.current = currentRoundId;
+      duelResolvedRoundIdRef.current = '';
+
+      const target = parseFloat((1.35 + Math.random() * 3.5).toFixed(2));
+      setActiveDuel(prev => prev ? {
+        ...prev,
+        status: 'PLAYING',
+        userMult: undefined,
+        opponentMult: undefined,
+        opponentTargetMult: target,
+        opponentCashedOut: false,
+        winner: undefined,
+        resultMessage: undefined,
+      } : null);
+
+      if (userBet === 0 && balance >= activeDuel.wager) {
+        handlePlaceBet(activeDuel.wager);
+      }
+    }
+
+    // Bot cashout during FLYING
+    if (
+      phase === 'FLYING' &&
+      activeDuel.status === 'PLAYING' &&
+      !activeDuel.opponentCashedOut &&
+      activeDuel.opponentTargetMult &&
+      multiplier >= activeDuel.opponentTargetMult
+    ) {
+      sounds.playClick();
+      setActiveDuel(prev => prev ? {
+        ...prev,
+        opponentCashedOut: true,
+        opponentMult: activeDuel.opponentTargetMult,
+      } : null);
+
+      setMessages(prev => [
+        ...prev.slice(-30),
+        {
+          id: `bot_duel_${Date.now()}`,
+          user: activeDuel.opponentName,
+          avatar: activeDuel.opponentAvatar,
+          text: `🤖 Đã chốt cược Solo tại ${activeDuel.opponentTargetMult.toFixed(2)}x! Bạn có dám gồng cao hơn không? 🔥`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          badge: 'SOLO 1V1',
+          isSystem: true,
+        },
+      ]);
+    }
+
+    // Evaluate Duel result on CRASHED
+    if (
+      phase === 'CRASHED' &&
+      activeDuel.status === 'PLAYING' &&
+      duelResolvedRoundIdRef.current !== currentRoundId
+    ) {
+      duelResolvedRoundIdRef.current = currentRoundId;
+
+      const userM = userCashoutMultiplier || userCashoutMultiplier2 || 0;
+      const oppM = activeDuel.opponentCashedOut ? (activeDuel.opponentMult || 0) : 0;
+
+      let winnerResult: 'USER' | 'OPPONENT' | 'DRAW' = 'DRAW';
+      let msg = '';
+
+      if (userM > oppM) {
+        winnerResult = 'USER';
+        const winPot = activeDuel.wager * 2;
+        setBalance(b => b + winPot);
+        msg = `🏆 BẠN THẮNG SOLO 1V1! (${userM.toFixed(2)}x vs ${oppM.toFixed(2)}x) -> +${winPot.toLocaleString('vi-VN')} Xu!`;
+        sounds.playClaimReward();
+        confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
+      } else if (userM < oppM) {
+        winnerResult = 'OPPONENT';
+        msg = `❌ THẤT BẠI SOLO 1V1! (${userM.toFixed(2)}x vs ${oppM.toFixed(2)}x) -> ${activeDuel.opponentName} húp trọn hũ.`;
+        sounds.playErrorBeep();
+      } else {
+        winnerResult = 'DRAW';
+        setBalance(b => b + activeDuel.wager);
+        msg = `🤝 HÒA SOLO 1V1! (${userM.toFixed(2)}x) -> Hoàn lại ${activeDuel.wager.toLocaleString('vi-VN')} Xu.`;
+      }
+
+      setActiveDuel(prev => prev ? {
+        ...prev,
+        status: 'FINISHED',
+        userMult: userM,
+        opponentMult: oppM,
+        winner: winnerResult,
+        resultMessage: msg,
+      } : null);
+
+      setShowDuelResultModal(true);
+
+      setMessages(prev => [
+        ...prev.slice(-30),
+        {
+          id: `duel_result_${Date.now()}`,
+          user: 'Trọng Tài Vũ Trụ',
+          avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Referee',
+          text: msg,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          badge: 'SOLO 1V1',
+          isSystem: true,
+        },
+      ]);
+    }
+  }, [phase, multiplier, currentRoundId, userCashoutMultiplier, userCashoutMultiplier2, activeDuel]);
+
   // Place Bet 1 via Server API
   const handlePlaceBet = async (amount: number) => {
     if (amount <= 0 || amount > balance) return;
@@ -910,23 +1028,41 @@ export default function App() {
   };
 
   // Start 1v1 Duel Challenge
-  const handleStartDuel = (wager: number, opponentName: string, opponentAvatar: string) => {
-    if (balance < wager) return;
-    setBalance(prev => prev - wager);
-    setActiveDuel({
+  const handleStartDuel = async (wager: number, opponentName: string, opponentAvatar: string) => {
+    if (balance < wager) {
+      sounds.playErrorBeep();
+      alert('Số dư Xu không đủ để tham gia Thách Đấu!');
+      return;
+    }
+
+    setShowDuelModal(false);
+    setShowDuelResultModal(false);
+
+    const target = parseFloat((1.30 + Math.random() * 3.5).toFixed(2));
+
+    const newDuel: DuelState = {
       active: true,
       opponentName,
       opponentAvatar,
       wager,
-      status: 'PLAYING',
-    });
+      status: phase === 'COUNTDOWN' ? 'PLAYING' : 'WAITING',
+      opponentTargetMult: target,
+      opponentCashedOut: false,
+    };
+
+    setActiveDuel(newDuel);
+
+    if (phase === 'COUNTDOWN' && userBet === 0) {
+      await handlePlaceBet(wager);
+    }
+
     setMessages(prev => [
       ...prev.slice(-30),
       {
         id: `duel_${Date.now()}`,
         user: 'Hệ Thống',
         avatar: opponentAvatar,
-        text: `⚔️ THÁCH ĐẤU SOLO 1V1: Bạn đã thách đấu ${opponentName} mức cược ${wager.toLocaleString('vi-VN')} Xu! Ai chốt ở hệ số cao hơn sẽ nuốt trọn cược! 🔥`,
+        text: `⚔️ BẠN ĐÃ THÁCH ĐẤU SOLO 1V1: Đã đặt cược ${wager.toLocaleString('vi-VN')} Xu vs ${opponentName}! Hãy gồng cược để áp đảo đối thủ! 🔥`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         badge: 'SOLO 1V1',
         isSystem: true,
@@ -1178,6 +1314,15 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* Left / Center 8 cols: Rocket Arena & Betting Controls */}
           <div className="lg:col-span-8 flex flex-col gap-4">
+            {/* Live 1v1 Solo Duel Banner */}
+            {activeDuel && activeDuel.active && (
+              <DuelBanner
+                duel={activeDuel}
+                onRematch={() => handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar)}
+                onClose={() => setActiveDuel(null)}
+              />
+            )}
+
             {/* The Rocket Canvas */}
             <RocketCanvas
               phase={phase}
@@ -1258,6 +1403,21 @@ export default function App() {
         activeDuel={activeDuel}
         onStartDuel={handleStartDuel}
         onCancelDuel={handleCancelDuel}
+      />
+
+      <DuelResultModal
+        isOpen={showDuelResultModal}
+        duel={activeDuel}
+        onClose={() => setShowDuelResultModal(false)}
+        onRematch={() => {
+          if (activeDuel) {
+            handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar);
+          }
+        }}
+        onChangeOpponent={() => {
+          setShowDuelResultModal(false);
+          setShowDuelModal(true);
+        }}
       />
 
       <ProvablyFairModal

@@ -104,9 +104,13 @@ export interface DuelState {
   opponentName: string;
   opponentAvatar: string;
   wager: number;
-  status: 'PENDING' | 'PLAYING' | 'WON' | 'LOST' | 'DRAW';
+  status: 'WAITING' | 'PLAYING' | 'FINISHED';
   userMult?: number;
   opponentMult?: number;
+  opponentTargetMult?: number;
+  opponentCashedOut?: boolean;
+  winner?: 'USER' | 'OPPONENT' | 'DRAW';
+  resultMessage?: string;
 }
 
 export interface LeaderboardItem {
