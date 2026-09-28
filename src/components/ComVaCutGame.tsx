@@ -147,6 +147,10 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
   // Force Landscape Fullscreen container state
   const [isLandscapeMode, setIsLandscapeMode] = useState<boolean>(false);
+  const [windowDimensions, setWindowDimensions] = useState(() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 390,
+    height: typeof window !== 'undefined' ? window.innerHeight : 844,
+  }));
   const [isPortrait, setIsPortrait] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return window.innerHeight > window.innerWidth;
@@ -154,7 +158,10 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
   useEffect(() => {
     const handleOrientationChange = () => {
-      setIsPortrait(window.innerHeight > window.innerWidth);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      setWindowDimensions({ width: w, height: h });
+      setIsPortrait(h > w);
     };
     window.addEventListener('resize', handleOrientationChange);
     window.addEventListener('orientationchange', handleOrientationChange);
@@ -164,6 +171,10 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     };
   }, []);
 
+  const isPhysicalLandscape = !isPortrait;
+  const isVirtualLandscape = isLandscapeMode && isPortrait;
+  const isLandscapeActive = isLandscapeMode || (isPhysicalLandscape && windowDimensions.width > 700);
+
   const toggleLandscape = async () => {
     sounds.playClick();
     const next = !isLandscapeMode;
@@ -172,16 +183,16 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     if (next) {
       try {
         if (document.documentElement.requestFullscreen && !document.fullscreenElement) {
-          await document.documentElement.requestFullscreen();
+          await document.documentElement.requestFullscreen().catch(() => {});
         }
         if (screen.orientation && 'lock' in screen.orientation) {
-          await (screen.orientation as any).lock('landscape');
+          await (screen.orientation as any).lock('landscape').catch(() => {});
         }
       } catch {}
     } else {
       try {
         if (document.fullscreenElement && document.exitFullscreen) {
-          await document.exitFullscreen();
+          await document.exitFullscreen().catch(() => {});
         }
         if (screen.orientation && 'unlock' in screen.orientation) {
           (screen.orientation as any).unlock();
@@ -431,16 +442,20 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   const handleTouchOrMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
     if (phase !== 'OPENING' || isLidFullyOpen) return;
     setIsDraggingLid(true);
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const rawX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const rawY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const clientX = isVirtualLandscape ? rawY : rawX;
+    const clientY = isVirtualLandscape ? (windowDimensions.width - rawX) : rawY;
     dragStartRef.current = { x: clientX - lidOffset.x, y: clientY - lidOffset.y };
     sounds.playLidSlide();
   };
 
   const handleTouchOrMouseMove = useCallback((e: MouseEvent | TouchEvent) => {
     if (!isDraggingLid) return;
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const rawX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const rawY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const clientX = isVirtualLandscape ? rawY : rawX;
+    const clientY = isVirtualLandscape ? (windowDimensions.width - rawX) : rawY;
     const nextX = clientX - dragStartRef.current.x;
     const nextY = clientY - dragStartRef.current.y;
 
@@ -451,7 +466,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       setIsDraggingLid(false);
       finalizeRound(dices);
     }
-  }, [isDraggingLid, dices]);
+  }, [isDraggingLid, dices, isVirtualLandscape, windowDimensions.width]);
 
   const handleTouchOrMouseUp = useCallback(() => {
     if (!isDraggingLid) return;
@@ -561,36 +576,33 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
   const totalUserBet = Object.values(userBets).reduce((a, b) => a + b, 0);
   const currentTotalDice = dices[0] + dices[1] + dices[2];
-  const isLandscapeActive = isLandscapeMode && !isPortrait;
-
   return (
     <div
+      style={
+        isVirtualLandscape
+          ? {
+              position: 'fixed',
+              top: 0,
+              left: `${windowDimensions.width}px`,
+              width: `${windowDimensions.height}px`,
+              height: `${windowDimensions.width}px`,
+              transformOrigin: 'top left',
+              transform: 'rotate(90deg)',
+              zIndex: 9999,
+              overflow: 'hidden',
+            }
+          : undefined
+      }
       className={`w-full flex flex-col gap-2 max-w-6xl mx-auto pb-4 select-none transition-all ${
         isLandscapeActive
-          ? 'fixed inset-0 z-[9999] bg-[#070a13] p-1.5 sm:p-2.5 flex flex-col justify-between overflow-hidden h-screen'
+          ? isVirtualLandscape
+            ? 'bg-[#070a13] p-1.5 xs:p-2 flex flex-col justify-between overflow-hidden'
+            : isLandscapeMode
+            ? 'fixed inset-0 z-[9999] bg-[#070a13] p-1.5 sm:p-2.5 flex flex-col justify-between overflow-hidden h-screen'
+            : 'p-1.5 sm:p-2.5 flex flex-col justify-between'
           : ''
       }`}
     >
-      {/* Friendly Landscape Device Rotation Helper (When Fullscreen requested but still in Portrait) */}
-      {isLandscapeMode && isPortrait && (
-        <div className="fixed inset-0 z-[10000] bg-slate-950/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
-          <div className="w-20 h-20 rounded-3xl bg-amber-500/10 border-2 border-amber-500/40 flex items-center justify-center mb-5 shadow-[0_0_35px_rgba(245,158,11,0.3)] animate-bounce">
-            <RotateCw className="w-10 h-10 text-amber-400 animate-spin [animation-duration:3s]" />
-          </div>
-          <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-wider mb-2">
-            Vui Lòng Xoay Ngang Điện Thoại 🔄
-          </h3>
-          <p className="text-xs sm:text-sm text-slate-300 max-w-xs mb-6 leading-relaxed">
-            Hãy bật tính năng <strong>Tự động xoay</strong> của điện thoại và cầm ngang máy để mở rộng bàn cược Sicbo toàn màn hình cực đã!
-          </p>
-          <button
-            onClick={() => setIsLandscapeMode(false)}
-            className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-700 hover:from-slate-700 hover:to-slate-600 border border-slate-600 text-white font-bold text-xs cursor-pointer shadow-lg active:scale-95 transition-all"
-          >
-            ✕ Chơi ở màn hình dọc bình thường
-          </button>
-        </div>
-      )}
 
       {/* Top Banner: Game Name, Round, Wallet Balance with Quick Add */}
       <div className={`flex flex-wrap items-center justify-between gap-1.5 bg-gradient-to-r from-amber-950/80 via-slate-900/95 to-yellow-950/80 border border-amber-500/40 rounded-xl sm:rounded-2xl shadow-xl backdrop-blur-md shrink-0 ${
@@ -654,10 +666,10 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                 ? 'bg-rose-950/90 border-rose-500 text-rose-300 ring-2 ring-rose-500/40 hover:bg-rose-900'
                 : 'bg-gradient-to-r from-amber-500/25 to-yellow-500/25 border-amber-400 text-amber-300 hover:bg-amber-500/35 ring-1 ring-amber-400/50'
             }`}
-            title={isLandscapeMode ? 'Thoát chế độ toàn màn hình ngang' : 'Bật chế độ toàn màn hình ngang'}
+            title={isLandscapeMode ? 'Quay lại màn hình dọc' : 'Xoay ngang màn hình chuẩn Casino'}
           >
             <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isLandscapeMode ? '✕ Thu Nhỏ' : '🔄 Xoay Ngang'}</span>
+            <span>{isLandscapeMode ? '✕ Xoay Dọc' : '🔄 Xoay Ngang'}</span>
           </button>
 
           {/* Mini Chat Toggle Button with unread badge */}
