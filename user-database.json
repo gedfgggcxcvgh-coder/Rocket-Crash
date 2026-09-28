@@ -3,16 +3,34 @@
     "discordId": "1119979396422439045",
     "username": "Vodka",
     "avatar": "https://cdn.discordapp.com/embed/avatars/0.png",
-    "balance": 10560000,
+    "balance": 16120000,
     "stats": {
       "balance": 10560000,
-      "totalGames": 5,
-      "wins": 2,
+      "totalGames": 7,
+      "wins": 4,
       "losses": 3,
-      "totalProfit": -295000,
+      "totalProfit": 20825000,
       "highestMultiplier": 3.13,
-      "totalWagered": 3924760
+      "totalWagered": 35604760
     },
-    "lastSyncedAt": 1790533553067
+    "lastSyncedAt": 1790560126576
+  },
+  "guest_q2tklz38": {
+    "id": "guest_q2tklz38",
+    "username": "Khách",
+    "balance": 1000000,
+    "stats": {
+      "totalGames": 0,
+      "wins": 0,
+      "losses": 0,
+      "totalProfit": 0,
+      "highestMultiplier": 0,
+      "totalWagered": 0
+    }
+  },
+  "1119979396422439045_bet2": {
+    "id": "1119979396422439045_bet2",
+    "username": "Vodka (Vé 2)",
+    "balance": 1000000
   }
 }

@@ -11,6 +11,18 @@ export interface PlayerBet {
   status: 'PENDING' | 'FLYING' | 'WON' | 'LOST';
   winAmount?: number;
   isCurrentUser?: boolean;
+  vipTitle?: string;
+  badge?: string;
+  betIndex?: number;
+}
+
+export interface SingleBetState {
+  betAmount: number;
+  autoCashoutEnabled: boolean;
+  autoCashoutTarget: number;
+  isPlaced: boolean;
+  cashedOut: boolean;
+  cashoutMultiplier?: number;
 }
 
 export interface RoundHistory {
@@ -30,6 +42,9 @@ export interface UserStats {
   totalProfit: number;
   highestMultiplier: number;
   totalWagered: number;
+  equippedSkin?: RocketSkinId;
+  unlockedSkins?: RocketSkinId[];
+  vipTitle?: string;
 }
 
 export interface ChatMessage {
@@ -37,6 +52,7 @@ export interface ChatMessage {
   user: string;
   avatar: string;
   badge?: string;
+  vipTitle?: string;
   text: string;
   time: string;
   isSystem?: boolean;
@@ -60,6 +76,46 @@ export interface ActiveFlightEvent {
   expiresAtTimestamp: number;
   rewardClaimed?: boolean;
   rewardAmount?: number;
-  // Interactive object coordinates on canvas (normalized 0 to 1)
   targetPos?: { x: number; y: number; size: number };
+}
+
+export type RocketSkinId = 'STANDARD' | 'CYBERPUNK' | 'PHOENIX' | 'UFO_ALIEN' | 'DRAGONFIRE';
+
+export interface RocketSkin {
+  id: RocketSkinId;
+  name: string;
+  price: number;
+  description: string;
+  icon: string;
+  trailColorHex: string[];
+  particleColorHex: string[];
+}
+
+export interface JackpotInfo {
+  pool: number;
+  lastWinner?: string;
+  lastWinAmount?: number;
+  lastWinMultiplier?: number;
+  lastWinTime?: number;
+}
+
+export interface DuelState {
+  active: boolean;
+  opponentName: string;
+  opponentAvatar: string;
+  wager: number;
+  status: 'PENDING' | 'PLAYING' | 'WON' | 'LOST' | 'DRAW';
+  userMult?: number;
+  opponentMult?: number;
+}
+
+export interface LeaderboardItem {
+  id: string;
+  username: string;
+  avatar: string;
+  totalProfit: number;
+  highestMultiplier: number;
+  wins: number;
+  vipTitle: string;
+  badge: string;
 }

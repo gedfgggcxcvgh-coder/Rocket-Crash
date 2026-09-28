@@ -18,6 +18,10 @@ import { ProvablyFairModal } from './components/ProvablyFairModal';
 import { DiscordAccountModal } from './components/DiscordAccountModal';
 import { UserStatsModal } from './components/UserStatsModal';
 import { RulesModal } from './components/RulesModal';
+import { RocketGarageModal } from './components/RocketGarageModal';
+import { LeaderboardModal } from './components/LeaderboardModal';
+import { DuelModal } from './components/DuelModal';
+import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
 import { Volume2, VolumeX, Coins } from 'lucide-react';
 
 const INITIAL_BALANCE = 500000;
@@ -70,7 +74,7 @@ export default function App() {
   // Discord Linked Account State
   const [discordUser, setDiscordUser] = useState<DiscordUser | null>(() => getSavedDiscordUser());
 
-  // User Betting State
+  // User Betting State - Dual Bet 1 (An Toàn)
   const [balance, setBalance] = useState<number>(() => {
     const savedDiscord = getSavedDiscordUser();
     if (savedDiscord) return savedDiscord.balance;
@@ -81,7 +85,24 @@ export default function App() {
   const [userCashedOut, setUserCashedOut] = useState<boolean>(false);
   const [userCashoutMultiplier, setUserCashoutMultiplier] = useState<number | undefined>(undefined);
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
-  const [autoCashoutTarget, setAutoCashoutTarget] = useState<number>(3.0);
+  const [autoCashoutTarget, setAutoCashoutTarget] = useState<number>(2.0);
+
+  // Dual Bet 2 (Gồng Đỉnh)
+  const [userBet2, setUserBet2] = useState<number>(0);
+  const [userCashedOut2, setUserCashedOut2] = useState<boolean>(false);
+  const [userCashoutMultiplier2, setUserCashoutMultiplier2] = useState<number | undefined>(undefined);
+  const [autoCashoutEnabled2, setAutoCashoutEnabled2] = useState<boolean>(false);
+  const [autoCashoutTarget2, setAutoCashoutTarget2] = useState<number>(10.0);
+
+  // New Modals & Feature States
+  const [showGarageModal, setShowGarageModal] = useState<boolean>(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState<boolean>(false);
+  const [showDuelModal, setShowDuelModal] = useState<boolean>(false);
+  const [equippedSkin, setEquippedSkin] = useState<RocketSkinId>('STANDARD');
+  const [unlockedSkins, setUnlockedSkins] = useState<RocketSkinId[]>(['STANDARD']);
+  const [jackpotPool, setJackpotPool] = useState<number>(18500000);
+  const [activeDuel, setActiveDuel] = useState<DuelState | null>(null);
+  const [leaderboardItems, setLeaderboardItems] = useState<LeaderboardItem[]>([]);
 
   // History & Community
   const [history, setHistory] = useState<RoundHistory[]>([]);
@@ -315,6 +336,14 @@ export default function App() {
               setUserCashedOut(false);
               setUserCashoutMultiplier(undefined);
               setUserBet(0);
+
+              setUserCashedOut2(false);
+              setUserCashoutMultiplier2(undefined);
+              setUserBet2(0);
+            }
+
+            if (typeof data.jackpotPool === 'number') {
+              setJackpotPool(data.jackpotPool);
             }
 
             setPhase(data.status);
@@ -623,7 +652,7 @@ export default function App() {
     ]);
   };
 
-  // Auto Cashout trigger when rocket multiplier reaches user's target
+  // Auto Cashout trigger when rocket multiplier reaches user's target (Dual Bet 1 & Bet 2)
   useEffect(() => {
     if (
       phase === 'FLYING' &&
@@ -636,7 +665,19 @@ export default function App() {
     }
   }, [phase, userBet, userCashedOut, autoCashoutEnabled, multiplier, autoCashoutTarget]);
 
-  // Place Bet via Server API
+  useEffect(() => {
+    if (
+      phase === 'FLYING' &&
+      userBet2 > 0 &&
+      !userCashedOut2 &&
+      autoCashoutEnabled2 &&
+      multiplier >= autoCashoutTarget2
+    ) {
+      handleCashoutClick2();
+    }
+  }, [phase, userBet2, userCashedOut2, autoCashoutEnabled2, multiplier, autoCashoutTarget2]);
+
+  // Place Bet 1 via Server API
   const handlePlaceBet = async (amount: number) => {
     if (amount <= 0 || amount > balance) return;
     sounds.playClick();
@@ -681,7 +722,51 @@ export default function App() {
     }
   };
 
-  // Cancel Bet during COUNTDOWN
+  // Place Bet 2 (Tay Cược 2)
+  const handlePlaceBet2 = async (amount: number) => {
+    if (amount <= 0 || amount > balance) return;
+    sounds.playClick();
+    setUserBet2(amount);
+
+    const userId = `${currentUserId}_bet2`;
+    const username = discordUser ? `${discordUser.globalName || discordUser.username} (Vé 2)` : 'Khách (Vé 2)';
+    const avatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest2';
+
+    try {
+      const res = await fetch('/api/game/bet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          username,
+          avatar,
+          betAmount: amount,
+          targetMultiplier: autoCashoutEnabled2 ? autoCashoutTarget2 : undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || 'Đặt cược 2 thất bại.');
+        setUserBet2(0);
+        return;
+      }
+
+      if (typeof data.newBalance === 'number') {
+        setBalance(data.newBalance);
+      } else {
+        setBalance(prev => prev - amount);
+      }
+      setStats(prev => ({
+        ...prev,
+        totalWagered: prev.totalWagered + amount,
+      }));
+    } catch (err) {
+      console.error('Bet2 API error:', err);
+    }
+  };
+
+  // Cancel Bet 1 during COUNTDOWN
   const handleCancelBet = () => {
     if (userBet <= 0 || phase !== 'COUNTDOWN') return;
     sounds.playClick();
@@ -689,7 +774,15 @@ export default function App() {
     setUserBet(0);
   };
 
-  // Manual Cashout button click via Server API
+  // Cancel Bet 2 during COUNTDOWN
+  const handleCancelBet2 = () => {
+    if (userBet2 <= 0 || phase !== 'COUNTDOWN') return;
+    sounds.playClick();
+    setBalance(prev => prev + userBet2);
+    setUserBet2(0);
+  };
+
+  // Manual Cashout Bet 1
   const handleCashoutClick = async () => {
     if (userCashedOut || phase !== 'FLYING') return;
 
@@ -734,7 +827,7 @@ export default function App() {
           id: Date.now().toString(),
           user: userDisplayName,
           avatar: userAvatar,
-          text: `Đã chốt lời an toàn tại ${data.cashoutMultiplier.toFixed(2)}x [${stage.badge}] (+${data.winAmount.toLocaleString('vi-VN')} Xu)! 🤑🎉`,
+          text: `Đã chốt lời Vé 1 tại ${data.cashoutMultiplier.toFixed(2)}x [${stage.badge}] (+${data.winAmount.toLocaleString('vi-VN')} Xu)! 🤑🎉`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           badge: discordUser ? 'DISCORD' : 'VIP',
           isSystem: true,
@@ -743,6 +836,121 @@ export default function App() {
     } catch (err) {
       console.error('Cashout API error:', err);
     }
+  };
+
+  // Manual Cashout Bet 2
+  const handleCashoutClick2 = async () => {
+    if (userCashedOut2 || phase !== 'FLYING') return;
+
+    const userId = `${currentUserId}_bet2`;
+
+    try {
+      const res = await fetch('/api/game/cashout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) return;
+
+      sounds.playCashoutWin();
+      setUserCashedOut2(true);
+      setUserCashoutMultiplier2(data.cashoutMultiplier);
+
+      const winAmt = data.winAmount || Math.floor(userBet2 * data.cashoutMultiplier);
+      if (typeof data.newBalance === 'number') {
+        setBalance(data.newBalance);
+      } else {
+        setBalance(prev => prev + winAmt);
+      }
+
+      const netProfit = winAmt - userBet2;
+      setStats(prev => ({
+        ...prev,
+        totalGames: prev.totalGames + 1,
+        wins: prev.wins + 1,
+        totalProfit: prev.totalProfit + netProfit,
+        highestMultiplier: Math.max(prev.highestMultiplier, data.cashoutMultiplier),
+      }));
+
+      const stage = getAltitudeStage(data.cashoutMultiplier);
+      const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
+      const userAvatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=You';
+      setMessages(prev => [
+        ...prev.slice(-30),
+        {
+          id: Date.now().toString(),
+          user: userDisplayName,
+          avatar: userAvatar,
+          text: `🔥 GỒNG ĐỈNH THÀNH CÔNG Vé 2 tại ${data.cashoutMultiplier.toFixed(2)}x (+${winAmt.toLocaleString('vi-VN')} Xu)!! 🎉🚀`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          badge: 'GỒNG ĐỈNH',
+          isSystem: true,
+        },
+      ]);
+    } catch (err) {
+      console.error('Cashout2 API error:', err);
+    }
+  };
+
+  // Fetch Leaderboards
+  const handleOpenLeaderboards = async () => {
+    sounds.playClick();
+    setShowLeaderboardModal(true);
+    try {
+      const res = await fetch('/api/game/leaderboard');
+      const data = await res.json();
+      if (res.ok && Array.isArray(data)) {
+        setLeaderboardItems(data);
+      }
+    } catch (err) {
+      console.error('Leaderboard API error:', err);
+    }
+  };
+
+  // Start 1v1 Duel Challenge
+  const handleStartDuel = (wager: number, opponentName: string, opponentAvatar: string) => {
+    if (balance < wager) return;
+    setBalance(prev => prev - wager);
+    setActiveDuel({
+      active: true,
+      opponentName,
+      opponentAvatar,
+      wager,
+      status: 'PLAYING',
+    });
+    setMessages(prev => [
+      ...prev.slice(-30),
+      {
+        id: `duel_${Date.now()}`,
+        user: 'Hệ Thống',
+        avatar: opponentAvatar,
+        text: `⚔️ THÁCH ĐẤU SOLO 1V1: Bạn đã thách đấu ${opponentName} mức cược ${wager.toLocaleString('vi-VN')} Xu! Ai chốt ở hệ số cao hơn sẽ nuốt trọn cược! 🔥`,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        badge: 'SOLO 1V1',
+        isSystem: true,
+      },
+    ]);
+  };
+
+  const handleCancelDuel = () => {
+    if (activeDuel) {
+      setBalance(prev => prev + activeDuel.wager);
+      setActiveDuel(null);
+    }
+  };
+
+  // Skin Management
+  const handleEquipSkin = (skinId: RocketSkinId) => {
+    setEquippedSkin(skinId);
+  };
+
+  const handleBuySkin = (skin: RocketSkin) => {
+    if (balance < skin.price) return;
+    setBalance(prev => prev - skin.price);
+    setUnlockedSkins(prev => [...prev, skin.id]);
+    setEquippedSkin(skin.id);
   };
 
   // Free Faucet replenishment
@@ -975,31 +1183,46 @@ export default function App() {
               phase={phase}
               multiplier={multiplier}
               countdown={countdown}
-              userBet={userBet}
-              userCashedOut={userCashedOut}
+              userBet={userBet + userBet2}
+              userCashedOut={userCashedOut && userCashedOut2}
               userCashoutMultiplier={userCashoutMultiplier}
               crashMultiplier={phase === 'CRASHED' ? crashPoint : undefined}
               activeEvent={activeEvent}
               onClaimEventReward={handleClaimEventReward}
               shieldSavedBet={shieldSavedBet}
+              equippedSkinId={equippedSkin}
+              jackpotPool={jackpotPool}
             />
 
-            {/* Betting Controls */}
+            {/* Dual Betting Controls */}
             <BettingControls
               phase={phase}
               balance={balance}
               currentMultiplier={multiplier}
-              userBet={userBet}
-              userCashedOut={userCashedOut}
-              userCashoutMultiplier={userCashoutMultiplier}
-              autoCashoutEnabled={autoCashoutEnabled}
-              autoCashoutTarget={autoCashoutTarget}
-              onSetAutoCashoutEnabled={setAutoCashoutEnabled}
-              onSetAutoCashoutTarget={setAutoCashoutTarget}
-              onPlaceBet={handlePlaceBet}
-              onCancelBet={handleCancelBet}
-              onCashout={handleCashoutClick}
+              userBet1={userBet}
+              userCashedOut1={userCashedOut}
+              userCashoutMultiplier1={userCashoutMultiplier}
+              autoCashoutEnabled1={autoCashoutEnabled}
+              autoCashoutTarget1={autoCashoutTarget}
+              onSetAutoCashoutEnabled1={setAutoCashoutEnabled}
+              onSetAutoCashoutTarget1={setAutoCashoutTarget}
+              onPlaceBet1={handlePlaceBet}
+              onCancelBet1={handleCancelBet}
+              onCashout1={handleCashoutClick}
+              userBet2={userBet2}
+              userCashedOut2={userCashedOut2}
+              userCashoutMultiplier2={userCashoutMultiplier2}
+              autoCashoutEnabled2={autoCashoutEnabled2}
+              autoCashoutTarget2={autoCashoutTarget2}
+              onSetAutoCashoutEnabled2={setAutoCashoutEnabled2}
+              onSetAutoCashoutTarget2={setAutoCashoutTarget2}
+              onPlaceBet2={handlePlaceBet2}
+              onCancelBet2={handleCancelBet2}
+              onCashout2={handleCashoutClick2}
               onAddFunds={handleAddFunds}
+              onOpenGarage={() => setShowGarageModal(true)}
+              onOpenDuel={() => setShowDuelModal(true)}
+              onOpenLeaderboard={handleOpenLeaderboards}
             />
           </div>
 
@@ -1012,6 +1235,31 @@ export default function App() {
       </main>
 
       {/* Modals */}
+      <RocketGarageModal
+        isOpen={showGarageModal}
+        onClose={() => setShowGarageModal(false)}
+        balance={balance}
+        equippedSkin={equippedSkin}
+        unlockedSkins={unlockedSkins}
+        onEquipSkin={handleEquipSkin}
+        onBuySkin={handleBuySkin}
+      />
+
+      <LeaderboardModal
+        isOpen={showLeaderboardModal}
+        onClose={() => setShowLeaderboardModal(false)}
+        items={leaderboardItems}
+      />
+
+      <DuelModal
+        isOpen={showDuelModal}
+        onClose={() => setShowDuelModal(false)}
+        balance={balance}
+        activeDuel={activeDuel}
+        onStartDuel={handleStartDuel}
+        onCancelDuel={handleCancelDuel}
+      />
+
       <ProvablyFairModal
         round={selectedAuditRound}
         onClose={() => setSelectedAuditRound(null)}

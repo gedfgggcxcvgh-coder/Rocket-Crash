@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { GamePhase, ActiveFlightEvent } from '../types/game';
+import { GamePhase, ActiveFlightEvent, RocketSkinId } from '../types/game';
 import { getAltitudeStage } from '../utils/provablyFair';
+import { getSkinById } from '../utils/skins';
+import { Trophy } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface RocketCanvasProps {
@@ -14,6 +16,8 @@ interface RocketCanvasProps {
   activeEvent?: ActiveFlightEvent | null;
   onClaimEventReward?: (event: ActiveFlightEvent) => void;
   shieldSavedBet?: boolean;
+  equippedSkinId?: RocketSkinId;
+  jackpotPool?: number;
 }
 
 interface Star {
@@ -55,6 +59,8 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
   activeEvent,
   onClaimEventReward,
   shieldSavedBet,
+  equippedSkinId,
+  jackpotPool,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const starsRef = useRef<Star[]>([]);
@@ -252,12 +258,15 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
         const exhaustX = rocketPos.x - Math.cos(rocketPos.angle) * 24;
         const exhaustY = rocketPos.y - Math.sin(rocketPos.angle) * 24;
 
-        // Dynamic flame color palette based on stage
-        let pColors = ['#F59E0B', '#EF4444', '#FBBF24'];
-        if (multiplier >= 20) {
-          pColors = ['#A855F7', '#C084FC', '#FBBF24', '#38BDF8'];
-        } else if (multiplier >= 6) {
-          pColors = ['#06B6D4', '#38BDF8', '#60A5FA', '#FFFFFF'];
+        // Dynamic flame color palette based on equipped skin or altitude stage
+        const skin = getSkinById(equippedSkinId || 'STANDARD');
+        let pColors = skin.particleColorHex;
+        if (equippedSkinId === 'STANDARD' || !equippedSkinId) {
+          if (multiplier >= 20) {
+            pColors = ['#A855F7', '#C084FC', '#FBBF24', '#38BDF8'];
+          } else if (multiplier >= 6) {
+            pColors = ['#06B6D4', '#38BDF8', '#60A5FA', '#FFFFFF'];
+          }
         }
 
         for (let i = 0; i < 4; i++) {
@@ -1010,6 +1019,18 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
             </p>
           </div>
         )}
+      </div>
+
+      {/* Jackpot Pool HUD Banner */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-gradient-to-r from-amber-950/90 via-slate-900/95 to-amber-950/90 border border-amber-500/60 rounded-full px-4 py-1.5 shadow-lg shadow-amber-500/20 backdrop-blur-md">
+        <Trophy className="w-4 h-4 text-amber-400 animate-bounce" />
+        <div className="flex items-center gap-1.5 text-xs">
+          <span className="font-extrabold text-amber-300 tracking-wide uppercase text-[11px]">Hũ Jackpot:</span>
+          <span className="font-mono-numbers font-black text-amber-400 text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
+            {(jackpotPool || 15850000).toLocaleString('vi-VN')}
+          </span>
+          <span className="text-[10px] font-bold text-amber-500">Xu</span>
+        </div>
       </div>
 
       {/* Corner telemetry info */}

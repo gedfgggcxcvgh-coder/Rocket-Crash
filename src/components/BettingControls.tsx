@@ -1,9 +1,12 @@
 import React, { useState } from 'react';
 import { GamePhase } from '../types/game';
-import { PlusCircle, Zap, Shield, ArrowUpRight } from 'lucide-react';
+import { PlusCircle, Zap, Shield, ArrowUpRight, Sparkles, Swords, Trophy } from 'lucide-react';
 import { sounds } from '../utils/audio';
 
-interface BettingControlsProps {
+interface SingleBetPanelProps {
+  title: string;
+  badgeText: string;
+  badgeColorClass: string;
   phase: GamePhase;
   balance: number;
   currentMultiplier: number;
@@ -17,10 +20,12 @@ interface BettingControlsProps {
   onPlaceBet: (amount: number) => void;
   onCancelBet: () => void;
   onCashout: () => void;
-  onAddFunds: (amount: number) => void;
 }
 
-export const BettingControls: React.FC<BettingControlsProps> = ({
+const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
+  title,
+  badgeText,
+  badgeColorClass,
   phase,
   balance,
   currentMultiplier,
@@ -34,15 +39,8 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
   onPlaceBet,
   onCancelBet,
   onCashout,
-  onAddFunds,
 }) => {
-  const [betInput, setBetInput] = useState<string>('500');
-  const numericBet = Math.max(10, Math.min(balance, parseInt(betInput, 10) || 0));
-
-  const handleBetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value.replace(/[^0-9]/g, '');
-    setBetInput(val);
-  };
+  const [betInput, setBetInput] = useState<string>('50000');
 
   const handleQuickAdd = (delta: number) => {
     sounds.playClick();
@@ -60,260 +58,325 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
     setBetInput(next.toString());
   };
 
-  const handleMax = () => {
-    sounds.playClick();
-    setBetInput(balance.toString());
-  };
-
+  const numericBet = Math.max(10, Math.min(balance, parseInt(betInput, 10) || 0));
   const projectedWin = Math.floor(userBet * currentMultiplier);
 
   return (
-    <div className="w-full bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 p-4 md:p-5 shadow-xl flex flex-col gap-4">
-      {/* Top row: Balance & Faucet */}
-      <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
-        <div className="flex flex-col">
-          <span className="text-[11px] font-medium text-slate-400">Số dư ví của bạn</span>
-          <div className="flex items-center gap-2">
-            <span className="text-2xl font-bold font-mono-numbers text-amber-400">
-              {balance.toLocaleString('vi-VN')}
-            </span>
-            <span className="text-xs uppercase font-bold text-amber-500/80 tracking-wider">Xu</span>
-          </div>
+    <div className="flex-1 bg-slate-950/70 border border-slate-800 rounded-2xl p-3.5 flex flex-col gap-3 shadow-inner">
+      {/* Panel Header */}
+      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+        <div className="flex items-center gap-2">
+          <span className="font-extrabold text-white text-xs">{title}</span>
+          <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold border ${badgeColorClass}`}>
+            {badgeText}
+          </span>
         </div>
-
-        <button
-          onClick={() => onAddFunds(500000)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 border border-emerald-600/50 hover:bg-emerald-900/80 text-emerald-400 text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer"
-          title="Nhận 500.000 Xu miễn phí để trải nghiệm cược"
-        >
-          <PlusCircle className="w-3.5 h-3.5" />
-          <span>+500.000 Xu Miễn Phí</span>
-        </button>
       </div>
 
-      {/* Main Execution Button - Positioned at top for quick reaction & visibility */}
-      <div className="w-full">
-        {/* State 1: Active In-Flight with User Bet Placed -> CASH OUT BUTTON */}
+      {/* Primary Action Button */}
+      <div>
         {phase === 'FLYING' && userBet > 0 && !userCashedOut && (
           <button
             type="button"
             onClick={onCashout}
-            className="w-full py-4 px-6 rounded-2xl font-black text-xl md:text-2xl transition-all flex items-center justify-center gap-3 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-[0.98] text-slate-950 shadow-xl shadow-emerald-500/25 border-2 border-emerald-300 animate-pulse cursor-pointer group"
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-emerald-500/30 active:scale-[0.98] animate-pulse cursor-pointer flex flex-col items-center justify-center leading-tight"
           >
-            <Zap className="w-7 h-7 text-slate-950 fill-current animate-bounce shrink-0" />
-            <div className="flex flex-col items-center leading-none">
-              <span>DỪNG LẠI & CHỐT LỜI (CASH OUT)</span>
-              <span className="text-sm font-bold font-mono-numbers opacity-90 mt-1">
-                Nhận +{projectedWin.toLocaleString('vi-VN')} Xu tại {currentMultiplier.toFixed(2)}x
-                {autoCashoutEnabled ? ` (Tự động tại ${autoCashoutTarget.toFixed(2)}x)` : ''}
-              </span>
+            <div className="flex items-center gap-1.5">
+              <span>CHỐT LÃI NGAY</span>
+              <ArrowUpRight className="w-4 h-4 stroke-[3]" />
             </div>
+            <span className="text-[11px] opacity-90 font-mono-numbers">
+              +{projectedWin.toLocaleString('vi-VN')} Xu ({currentMultiplier.toFixed(2)}x)
+            </span>
           </button>
         )}
 
-        {/* State 2: Active In-Flight and User Cashed Out */}
-        {phase === 'FLYING' && userCashedOut && (
-          <div className="w-full py-3.5 px-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-center font-semibold text-sm flex items-center justify-center gap-2">
-            <span>🎉 Bạn đã chốt lời thành công tại {userCashoutMultiplier?.toFixed(2)}x (+{(Math.floor(userBet * (userCashoutMultiplier || 1))).toLocaleString('vi-VN')} Xu)! Chờ vòng tiếp theo...</span>
+        {phase === 'FLYING' && userBet > 0 && userCashedOut && (
+          <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 font-extrabold text-xs text-center flex flex-col items-center justify-center">
+            <span className="text-[10px] uppercase font-bold text-emerald-500">Đã Chốt Lãi Thành Công</span>
+            <span className="font-mono-numbers text-sm text-white">
+              +{Math.floor(userBet * (userCashoutMultiplier || 1.0)).toLocaleString('vi-VN')} Xu ({userCashoutMultiplier?.toFixed(2)}x)
+            </span>
           </div>
         )}
 
-        {/* State 3: Active In-Flight but User didn't place bet */}
-        {phase === 'FLYING' && userBet === 0 && (
-          <div className="w-full py-3.5 px-4 rounded-xl bg-slate-950 border border-slate-800 text-slate-400 text-center font-medium text-sm flex items-center justify-center gap-2">
-            <span>🚀 Tên lửa đang bay ở mốc</span>
-            <span className="text-amber-400 font-bold font-mono-numbers text-base">{currentMultiplier.toFixed(2)}x</span>
-            <span>- Đợi vòng tới để cược!</span>
-          </div>
+        {phase === 'COUNTDOWN' && userBet > 0 && (
+          <button
+            type="button"
+            onClick={onCancelBet}
+            className="w-full py-3 rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-600/50 text-rose-300 font-bold text-xs transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-center"
+          >
+            <span>HỦY VÉ CƯỢC</span>
+            <span className="text-[10px] text-rose-400 font-normal">
+              ({userBet.toLocaleString('vi-VN')} Xu)
+            </span>
+          </button>
         )}
 
-        {/* State 4: COUNTDOWN -> Place Bet OR Cancel Bet */}
-        {phase === 'COUNTDOWN' && (
-          <>
-            {userBet > 0 ? (
-              <div className="flex flex-col sm:flex-row gap-3">
-                <div className="flex-1 py-3 px-4 rounded-xl bg-amber-950/50 border border-amber-500/40 flex items-center justify-between text-amber-300 text-sm font-semibold">
-                  <span>Đã đặt cược: {userBet.toLocaleString('vi-VN')} Xu</span>
-                  <span className="text-xs bg-amber-500/20 px-2 py-0.5 rounded text-amber-200">
-                    Sắp cất cánh...
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={onCancelBet}
-                  className="py-3 px-6 rounded-xl bg-red-950/80 border border-red-600/50 hover:bg-red-900/80 text-red-300 text-sm font-bold transition-all active:scale-95 whitespace-nowrap cursor-pointer"
-                >
-                  HỦY CƯỢC
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onPlaceBet(numericBet)}
-                disabled={numericBet <= 0 || numericBet > balance}
-                className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 active:scale-[0.98] text-slate-950 font-black text-lg md:text-xl shadow-lg shadow-amber-500/20 border border-yellow-300 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span>ĐẶT CƯỢC ({numericBet.toLocaleString('vi-VN')} XU)</span>
-                <ArrowUpRight className="w-5 h-5" />
-              </button>
-            )}
-          </>
-        )}
-
-        {/* State 5: CRASHED state */}
-        {phase === 'CRASHED' && (
-          <div className="w-full py-3.5 px-4 rounded-xl bg-red-950/50 border border-red-800/40 text-red-300 text-center text-sm font-semibold flex items-center justify-center gap-2">
-            <span>Tên lửa đã nổ! Đang khởi tạo vòng mới...</span>
-          </div>
+        {((phase === 'COUNTDOWN' && userBet === 0) || (phase === 'FLYING' && userBet === 0) || phase === 'CRASHED') && (
+          <button
+            type="button"
+            disabled={balance < numericBet || numericBet <= 0}
+            onClick={() => onPlaceBet(numericBet)}
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 text-slate-950 font-black text-sm tracking-wide transition-all shadow-md shadow-amber-500/20 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+          >
+            <Zap className="w-4 h-4 fill-slate-950" />
+            <span>
+              {phase === 'COUNTDOWN' ? 'ĐẶT CƯỢC VÁN NÀY' : 'ĐẶT CƯỢC VÁN SAU'}
+            </span>
+          </button>
         )}
       </div>
 
-      {/* Main Bet Formulation */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1 border-t border-slate-800/60">
-        {/* Left: Bet amount input and quick buttons */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <label htmlFor="bet-input" className="font-medium">
-              Số tiền cược (Xu)
-            </label>
-            <span>Tối thiểu: 10 Xu</span>
-          </div>
-
-          <div className="relative flex items-center">
-            <input
-              id="bet-input"
-              type="text"
-              value={betInput}
-              onChange={handleBetChange}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="w-full bg-slate-950 border border-slate-700/80 rounded-xl px-4 py-2.5 text-lg font-bold font-mono-numbers text-white focus:outline-none focus:border-amber-500 disabled:opacity-60 disabled:cursor-not-allowed pr-14"
-              placeholder="500"
-            />
-            <span className="absolute right-4 text-xs font-bold text-slate-500 uppercase pointer-events-none">
-              Xu
-            </span>
-          </div>
-
-          {/* Quick adjustment buttons */}
-          <div className="grid grid-cols-6 gap-1.5 pt-1">
-            <button
-              type="button"
-              onClick={() => handleQuickAdd(100)}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-bold font-mono-numbers text-slate-200 transition-colors disabled:opacity-40"
-            >
-              +100
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickAdd(500)}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-bold font-mono-numbers text-slate-200 transition-colors disabled:opacity-40"
-            >
-              +500
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickAdd(1000)}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-bold font-mono-numbers text-slate-200 transition-colors disabled:opacity-40"
-            >
-              +1K
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickMultiply(0.5)}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-bold font-mono-numbers text-slate-200 transition-colors disabled:opacity-40"
-            >
-              ½
-            </button>
-            <button
-              type="button"
-              onClick={() => handleQuickMultiply(2)}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-xs font-bold font-mono-numbers text-slate-200 transition-colors disabled:opacity-40"
-            >
-              2X
-            </button>
-            <button
-              type="button"
-              onClick={handleMax}
-              disabled={userBet > 0 && phase !== 'CRASHED'}
-              className="py-1.5 rounded-lg bg-amber-950/70 border border-amber-600/40 hover:bg-amber-900/60 active:bg-amber-800 text-xs font-bold font-mono-numbers text-amber-300 transition-colors disabled:opacity-40"
-            >
-              MAX
-            </button>
-          </div>
+      {/* Bet Amount Input & Quick Modifiers */}
+      <div className="flex flex-col gap-1.5">
+        <div className="relative flex items-center">
+          <input
+            type="text"
+            value={betInput}
+            disabled={userBet > 0}
+            onChange={e => setBetInput(e.target.value.replace(/[^0-9]/g, ''))}
+            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-3 pr-12 py-2 text-xs font-mono-numbers font-bold text-white focus:outline-none focus:border-amber-500 disabled:opacity-60"
+            placeholder="Mức cược..."
+          />
+          <span className="absolute right-3 text-[10px] font-bold text-amber-400 pointer-events-none">
+            Xu
+          </span>
         </div>
 
-        {/* Right: Auto Cashout Settings */}
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={autoCashoutEnabled}
-                onChange={e => onSetAutoCashoutEnabled(e.target.checked)}
-                className="w-4 h-4 rounded text-amber-500 bg-slate-950 border-slate-700 focus:ring-0 cursor-pointer"
-              />
-              <span className="font-medium text-slate-200">Tự động chốt lời (Auto Cashout)</span>
-            </label>
-            <span className="text-[11px] text-slate-500">Dừng ngay khi đạt mốc</span>
-          </div>
+        {/* Quick Amount Buttons */}
+        <div className="grid grid-cols-4 gap-1">
+          <button
+            type="button"
+            disabled={userBet > 0}
+            onClick={() => handleQuickAdd(50000)}
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-slate-300 disabled:opacity-50"
+          >
+            +50K
+          </button>
 
-          <div className="relative flex items-center">
-            <input
-              type="number"
-              step="0.1"
-              min="1.1"
-              max="500"
-              disabled={!autoCashoutEnabled || (userBet > 0 && phase !== 'CRASHED')}
-              value={autoCashoutTarget}
-              onChange={e => onSetAutoCashoutTarget(Math.max(1.1, parseFloat(e.target.value) || 2.0))}
-              className={`w-full bg-slate-950 border rounded-xl px-4 py-2.5 text-lg font-bold font-mono-numbers text-white focus:outline-none transition-all pr-12 ${
-                autoCashoutEnabled
-                  ? 'border-amber-500/80 ring-1 ring-amber-500/30'
-                  : 'border-slate-800 opacity-50 cursor-not-allowed'
-              }`}
-              placeholder="2.00"
-            />
-            <span className="absolute right-4 text-xs font-bold text-slate-500 uppercase pointer-events-none">
-              x
-            </span>
-          </div>
+          <button
+            type="button"
+            disabled={userBet > 0}
+            onClick={() => handleQuickAdd(200000)}
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-slate-300 disabled:opacity-50"
+          >
+            +200K
+          </button>
 
-          {/* Quick presets for auto multiplier up to high-flying values */}
-          <div className="grid grid-cols-6 gap-1.5 pt-1">
-            {[2.0, 3.0, 5.0, 10.0, 25.0, 50.0].map(val => (
-              <button
-                key={val}
-                type="button"
-                disabled={!autoCashoutEnabled || (userBet > 0 && phase !== 'CRASHED')}
-                onClick={() => {
-                  sounds.playClick();
-                  onSetAutoCashoutTarget(val);
-                }}
-                className={`py-1.5 rounded-lg text-xs font-bold font-mono-numbers transition-colors ${
-                  autoCashoutTarget === val && autoCashoutEnabled
-                    ? 'bg-amber-500 text-slate-950 shadow-sm'
-                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-40'
-                }`}
-              >
-                {val}x
-              </button>
-            ))}
-          </div>
+          <button
+            type="button"
+            disabled={userBet > 0}
+            onClick={() => handleQuickMultiply(2)}
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-amber-400 disabled:opacity-50"
+          >
+            x2
+          </button>
+
+          <button
+            type="button"
+            disabled={userBet > 0}
+            onClick={() => setBetInput(balance.toString())}
+            className="py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] font-extrabold text-amber-400 disabled:opacity-50"
+          >
+            MAX
+          </button>
         </div>
       </div>
 
-      {/* Security notice */}
-      <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-800/60">
-        <span className="flex items-center gap-1">
-          <Shield className="w-3.5 h-3.5 text-slate-400" />
-          Thuật toán Crash ngẫu nhiên & công bằng (Provably Fair)
-        </span>
-        <span className="text-slate-500">Mô phỏng giải trí • Rút thưởng kịp thời</span>
+      {/* Auto Cashout Config */}
+      <div className="flex items-center justify-between pt-2 border-t border-slate-800/60 text-xs">
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoCashoutEnabled}
+            onChange={e => onSetAutoCashoutEnabled(e.target.checked)}
+            className="w-3.5 h-3.5 rounded bg-slate-900 border-slate-700 text-amber-500 focus:ring-0"
+          />
+          <span className="text-[11px] font-semibold text-slate-300">Tự động chốt</span>
+        </label>
+
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            step="0.1"
+            min="1.01"
+            max="100.0"
+            disabled={!autoCashoutEnabled}
+            value={autoCashoutTarget}
+            onChange={e => onSetAutoCashoutTarget(parseFloat(e.target.value) || 2.0)}
+            className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-center font-bold text-amber-400 disabled:opacity-40 focus:outline-none"
+          />
+          <span className="text-[10px] font-bold text-slate-400">x</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface BettingControlsProps {
+  phase: GamePhase;
+  balance: number;
+  currentMultiplier: number;
+
+  userBet1: number;
+  userCashedOut1: boolean;
+  userCashoutMultiplier1?: number;
+  autoCashoutEnabled1: boolean;
+  autoCashoutTarget1: number;
+  onSetAutoCashoutEnabled1: (enabled: boolean) => void;
+  onSetAutoCashoutTarget1: (target: number) => void;
+  onPlaceBet1: (amount: number) => void;
+  onCancelBet1: () => void;
+  onCashout1: () => void;
+
+  userBet2: number;
+  userCashedOut2: boolean;
+  userCashoutMultiplier2?: number;
+  autoCashoutEnabled2: boolean;
+  autoCashoutTarget2: number;
+  onSetAutoCashoutEnabled2: (enabled: boolean) => void;
+  onSetAutoCashoutTarget2: (target: number) => void;
+  onPlaceBet2: (amount: number) => void;
+  onCancelBet2: () => void;
+  onCashout2: () => void;
+
+  onAddFunds: (amount: number) => void;
+  onOpenGarage?: () => void;
+  onOpenDuel?: () => void;
+  onOpenLeaderboard?: () => void;
+}
+
+export const BettingControls: React.FC<BettingControlsProps> = ({
+  phase,
+  balance,
+  currentMultiplier,
+  userBet1,
+  userCashedOut1,
+  userCashoutMultiplier1,
+  autoCashoutEnabled1,
+  autoCashoutTarget1,
+  onSetAutoCashoutEnabled1,
+  onSetAutoCashoutTarget1,
+  onPlaceBet1,
+  onCancelBet1,
+  onCashout1,
+  userBet2,
+  userCashedOut2,
+  userCashoutMultiplier2,
+  autoCashoutEnabled2,
+  autoCashoutTarget2,
+  onSetAutoCashoutEnabled2,
+  onSetAutoCashoutTarget2,
+  onPlaceBet2,
+  onCancelBet2,
+  onCashout2,
+  onAddFunds,
+  onOpenGarage,
+  onOpenDuel,
+  onOpenLeaderboard,
+}) => {
+  return (
+    <div className="w-full bg-slate-900/90 backdrop-blur-md rounded-2xl border border-slate-800 p-4 md:p-5 shadow-xl flex flex-col gap-4">
+      {/* Top row: Balance, Faucet & Navigation Shortcuts */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col">
+            <span className="text-[11px] font-medium text-slate-400">Số dư khả dụng</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xl font-bold font-mono-numbers text-amber-400">
+                {balance.toLocaleString('vi-VN')}
+              </span>
+              <span className="text-xs uppercase font-bold text-amber-500">Xu</span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => onAddFunds(500000)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-600/50 hover:bg-emerald-900/80 text-emerald-400 text-xs font-semibold transition-all shadow-sm active:scale-95 cursor-pointer"
+            title="Nhận 500.000 Xu miễn phí"
+          >
+            <PlusCircle className="w-3.5 h-3.5" />
+            <span>+500K Xu</span>
+          </button>
+        </div>
+
+        {/* Feature Hub Buttons */}
+        <div className="flex items-center gap-2">
+          {onOpenGarage && (
+            <button
+              onClick={onOpenGarage}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              title="Gara Tên Lửa & Vệt Khói Lửa"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+              <span>Gara Skin</span>
+            </button>
+          )}
+
+          {onOpenDuel && (
+            <button
+              onClick={onOpenDuel}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 hover:bg-red-500/20 text-red-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              title="Thách đấu Solo 1v1 Chiếm Ngai"
+            >
+              <Swords className="w-3.5 h-3.5 text-red-400" />
+              <span>Solo 1v1</span>
+            </button>
+          )}
+
+          {onOpenLeaderboard && (
+            <button
+              onClick={onOpenLeaderboard}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-500/10 border border-indigo-500/30 hover:bg-indigo-500/20 text-indigo-300 font-bold text-xs transition-all active:scale-95 cursor-pointer"
+              title="Bảng xếp hạng cao thủ"
+            >
+              <Trophy className="w-3.5 h-3.5 text-indigo-400" />
+              <span>BXH</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Dual Bet Panels (Side-by-Side Strategy) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <SingleBetPanel
+          title="Vé Cược 1"
+          badgeText="AN TOÀN"
+          badgeColorClass="bg-emerald-950/80 text-emerald-400 border-emerald-800"
+          phase={phase}
+          balance={balance}
+          currentMultiplier={currentMultiplier}
+          userBet={userBet1}
+          userCashedOut={userCashedOut1}
+          userCashoutMultiplier={userCashoutMultiplier1}
+          autoCashoutEnabled={autoCashoutEnabled1}
+          autoCashoutTarget={autoCashoutTarget1}
+          onSetAutoCashoutEnabled={onSetAutoCashoutEnabled1}
+          onSetAutoCashoutTarget={onSetAutoCashoutTarget1}
+          onPlaceBet={onPlaceBet1}
+          onCancelBet={onCancelBet1}
+          onCashout={onCashout1}
+        />
+
+        <SingleBetPanel
+          title="Vé Cược 2"
+          badgeText="GỒNG ĐỈNH"
+          badgeColorClass="bg-amber-950/80 text-amber-400 border-amber-800"
+          phase={phase}
+          balance={balance}
+          currentMultiplier={currentMultiplier}
+          userBet={userBet2}
+          userCashedOut={userCashedOut2}
+          userCashoutMultiplier={userCashoutMultiplier2}
+          autoCashoutEnabled={autoCashoutEnabled2}
+          autoCashoutTarget={autoCashoutTarget2}
+          onSetAutoCashoutEnabled={onSetAutoCashoutEnabled2}
+          onSetAutoCashoutTarget={onSetAutoCashoutTarget2}
+          onPlaceBet={onPlaceBet2}
+          onCancelBet={onCancelBet2}
+          onCashout={onCashout2}
+        />
       </div>
     </div>
   );

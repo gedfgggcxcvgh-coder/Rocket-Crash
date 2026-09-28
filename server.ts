@@ -231,6 +231,8 @@ async function startServer() {
     return userDatabase[userId];
   }
 
+  let globalJackpotPool = 18500000;
+
   function broadcastGameState() {
     const userBalances: Record<string, number> = {};
     Object.keys(userDatabase).forEach(uId => {
@@ -241,6 +243,7 @@ async function startServer() {
       ...globalGameState,
       chat: globalChatMessages,
       userBalances,
+      jackpotPool: globalJackpotPool,
       serverTime: Date.now(),
     });
     sseClients.forEach(client => {
@@ -352,12 +355,15 @@ async function startServer() {
               });
             }
 
-            if (!p.isBot && userDatabase[p.id]) {
-              const win = Math.floor(p.betAmount * p.targetMultiplier);
-              userDatabase[p.id].balance = (userDatabase[p.id].balance || 0) + win;
-              try {
-                fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
-              } catch {}
+            if (!p.isBot) {
+              const primaryUserId = p.id.replace('_bet2', '');
+              if (userDatabase[primaryUserId]) {
+                const win = Math.floor(p.betAmount * p.targetMultiplier);
+                userDatabase[primaryUserId].balance = (userDatabase[primaryUserId].balance || 0) + win;
+                try {
+                  fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+                } catch {}
+              }
             }
           }
         });
@@ -442,18 +448,22 @@ async function startServer() {
       return res.status(400).json({ error: 'Rất tiếc! Đợt cược ván này đã kết thúc.' });
     }
 
-    if (!userDatabase[userId]) {
-      userDatabase[userId] = {
-        id: userId,
-        username: username || 'Khách',
+    const primaryUserId = userId.replace('_bet2', '');
+
+    if (!userDatabase[primaryUserId]) {
+      userDatabase[primaryUserId] = {
+        id: primaryUserId,
+        username: username ? username.replace(' (Vé 2)', '') : 'Khách',
         balance: 1000000,
       };
     }
 
-    if ((userDatabase[userId].balance || 0) < betAmount) {
+    if ((userDatabase[primaryUserId].balance || 0) < betAmount) {
       return res.status(400).json({ error: 'Không đủ số dư Xu.' });
     }
-    userDatabase[userId].balance -= betAmount;
+    userDatabase[primaryUserId].balance -= betAmount;
+    globalJackpotPool += Math.floor(betAmount * 0.01);
+
     try {
       fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
     } catch {}
@@ -482,7 +492,7 @@ async function startServer() {
     }
 
     broadcastGameState();
-    res.json({ success: true, newBalance: userDatabase[userId]?.balance });
+    res.json({ success: true, newBalance: userDatabase[primaryUserId]?.balance });
   });
 
   // POST /api/game/cashout - Cashout bet
@@ -501,14 +511,15 @@ async function startServer() {
       return res.status(400).json({ error: 'Không tìm thấy cược mở.' });
     }
 
+    const primaryUserId = userId.replace('_bet2', '');
     const currentMult = globalGameState.multiplier;
     player.status = 'CASHED_OUT';
     player.cashoutMultiplier = currentMult;
 
     const winAmount = Math.floor(player.betAmount * currentMult);
 
-    if (userDatabase[userId]) {
-      userDatabase[userId].balance = (userDatabase[userId].balance || 0) + winAmount;
+    if (userDatabase[primaryUserId]) {
+      userDatabase[primaryUserId].balance = (userDatabase[primaryUserId].balance || 0) + winAmount;
       try {
         fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
       } catch {}
@@ -519,7 +530,7 @@ async function startServer() {
       success: true,
       cashoutMultiplier: currentMult,
       winAmount,
-      newBalance: userDatabase[userId]?.balance,
+      newBalance: userDatabase[primaryUserId]?.balance,
     });
   });
 
@@ -540,6 +551,31 @@ async function startServer() {
 
     broadcastGameState();
     res.json({ success: true, message: createdMsg });
+  });
+
+  // GET /api/game/leaderboard - Top Players Leaderboard
+  app.get('/api/game/leaderboard', (req, res) => {
+    const mockBotsLeaderboard = [
+      { id: 'b1', username: 'ThánhGồng_x100', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ThánhGồng_x100', totalProfit: 85200000, highestMultiplier: 104.50, wins: 42, vipTitle: 'Vua Gồng Lãi 👑', badge: 'VIP' },
+      { id: 'b2', username: 'ĐạiGia_SàiGòn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=DaiGia', totalProfit: 62400000, highestMultiplier: 78.20, wins: 38, vipTitle: 'Đại Gia Tên Lửa 💰', badge: 'VIP' },
+      { id: 'b3', username: 'Bảo_AllIn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Bao', totalProfit: 41800000, highestMultiplier: 45.10, wins: 29, vipTitle: 'Thần Tài Vũ Trụ ⚡', badge: 'VIP' },
+      { id: 'b4', username: 'Tuấn_TayTo', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan', totalProfit: 35000000, highestMultiplier: 32.80, wins: 25, vipTitle: 'Sát Thủ Tên Lửa 🎯', badge: 'VIP' },
+      { id: 'b5', username: 'Phúc_KhôMáu', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Phuc', totalProfit: 28400000, highestMultiplier: 28.50, wins: 21, vipTitle: 'Chiến Hạm Thép 🚀', badge: 'VIP' },
+    ];
+
+    const realUsers = Object.values(userDatabase).map((u: any) => ({
+      id: u.id,
+      username: u.username || 'Khách',
+      avatar: u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`,
+      totalProfit: u.stats?.totalProfit || 0,
+      highestMultiplier: u.stats?.highestMultiplier || 1.0,
+      wins: u.stats?.wins || 0,
+      vipTitle: u.stats?.vipTitle || 'Phi Công Tập Sự 🧑‍🚀',
+      badge: u.discordUser ? 'DISCORD' : 'VIP',
+    }));
+
+    const combined = [...realUsers, ...mockBotsLeaderboard].sort((a, b) => b.totalProfit - a.totalProfit);
+    res.json(combined);
   });
 
   // POST /api/auth/discord/config - Save dynamic Client ID and Client Secret permanently
