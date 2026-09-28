@@ -184,10 +184,40 @@ async function startServer() {
 
   let sseClients: Array<{ res: express.Response }> = [];
 
+  function getUserRecord(userId: string, username?: string) {
+    if (!userDatabase[userId]) {
+      userDatabase[userId] = {
+        id: userId,
+        username: username || 'Khách',
+        balance: 1000000,
+        stats: {
+          totalGames: 0,
+          wins: 0,
+          losses: 0,
+          totalProfit: 0,
+          highestMultiplier: 0,
+          totalWagered: 0,
+        },
+      };
+      try {
+        fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+      } catch (err) {
+        console.error('Failed to write user-database.json:', err);
+      }
+    }
+    return userDatabase[userId];
+  }
+
   function broadcastGameState() {
+    const userBalances: Record<string, number> = {};
+    Object.keys(userDatabase).forEach(uId => {
+      userBalances[uId] = userDatabase[uId].balance ?? 1000000;
+    });
+
     const payload = JSON.stringify({
       ...globalGameState,
       chat: globalChatMessages,
+      userBalances,
       serverTime: Date.now(),
     });
     sseClients.forEach(client => {
@@ -322,6 +352,29 @@ async function startServer() {
     req.on('close', () => {
       sseClients = sseClients.filter(c => c !== client);
     });
+  });
+
+  // GET /api/user/:userId - Get user profile & balance
+  app.get('/api/user/:userId', (req, res) => {
+    const { userId } = req.params;
+    const username = req.query.username as string;
+    const record = getUserRecord(userId, username);
+    res.json(record);
+  });
+
+  // POST /api/user/faucet - Add free test funds
+  app.post('/api/user/faucet', (req, res) => {
+    const { userId, amount } = req.body;
+    if (!userId || !amount || amount <= 0) {
+      return res.status(400).json({ error: 'Số tiền không hợp lệ' });
+    }
+    const record = getUserRecord(userId);
+    record.balance = (record.balance || 0) + amount;
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch {}
+    broadcastGameState();
+    res.json({ success: true, balance: record.balance });
   });
 
   // POST /api/game/bet - Place a bet

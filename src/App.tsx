@@ -42,6 +42,15 @@ const INITIAL_CHATS: ChatMessage[] = [
   { id: '4', user: 'Nam_ĂnNon', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nam', text: 'Cứ 2x tao nhảy, ăn non cho lành cãi nhau làm đéo gì', time: '14:29' },
 ];
 
+const getGuestUserId = (): string => {
+  let id = localStorage.getItem('rocket_crash_guest_id');
+  if (!id) {
+    id = 'guest_' + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem('rocket_crash_guest_id', id);
+  }
+  return id;
+};
+
 export default function App() {
   // Game Loop States
   const [phase, setPhase] = useState<GamePhase>('COUNTDOWN');
@@ -108,22 +117,22 @@ export default function App() {
     };
   });
 
+  const currentUserId = discordUser ? discordUser.id : getGuestUserId();
+
   // On startup: Fetch fresh account balance and stats from central server for cross-device sync
   useEffect(() => {
-    if (discordUser && discordUser.id) {
-      fetch(`/api/user/${discordUser.id}`)
-        .then(res => (res.ok ? res.json() : null))
-        .then(serverData => {
-          if (serverData && typeof serverData.balance === 'number') {
-            setBalance(serverData.balance);
-            if (serverData.stats) {
-              setStats(prev => ({ ...prev, ...serverData.stats }));
-            }
+    fetch(`/api/user/${currentUserId}`)
+      .then(res => (res.ok ? res.json() : null))
+      .then(serverData => {
+        if (serverData && typeof serverData.balance === 'number') {
+          setBalance(serverData.balance);
+          if (serverData.stats) {
+            setStats(prev => ({ ...prev, ...serverData.stats }));
           }
-        })
-        .catch(() => {});
-    }
-  }, [discordUser?.id]);
+        }
+      })
+      .catch(() => {});
+  }, [currentUserId]);
 
   // Real-time Cross-Tab Syncing (BroadcastChannel + Storage Event + Focus Event)
   useEffect(() => {
@@ -366,8 +375,11 @@ export default function App() {
               })));
             }
 
+            if (data.userBalances && typeof data.userBalances[currentUserId] === 'number') {
+              setBalance(data.userBalances[currentUserId]);
+            }
+
             if (Array.isArray(data.players)) {
-              const currentUserId = discordUser?.id || 'guest_user';
               const mappedPlayers: PlayerBet[] = data.players.map((p: any) => ({
                 id: p.id,
                 username: p.username,
@@ -725,9 +737,23 @@ export default function App() {
   };
 
   // Free Faucet replenishment
-  const handleAddFunds = (amount: number) => {
+  const handleAddFunds = async (amount: number) => {
     sounds.playCashoutWin();
-    setBalance(prev => prev + amount);
+    try {
+      const res = await fetch('/api/user/faucet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, amount }),
+      });
+      const resData = await res.json();
+      if (res.ok && typeof resData.balance === 'number') {
+        setBalance(resData.balance);
+      } else {
+        setBalance(prev => prev + amount);
+      }
+    } catch {
+      setBalance(prev => prev + amount);
+    }
   };
 
   // Toggle Sound
