@@ -18,6 +18,7 @@ interface RocketCanvasProps {
   shieldSavedBet?: boolean;
   equippedSkinId?: RocketSkinId;
   jackpotPool?: number;
+  onOpenGarage?: () => void;
 }
 
 interface Star {
@@ -48,6 +49,15 @@ interface Particle {
   type: 'flame' | 'smoke' | 'spark' | 'explosion' | 'star' | 'ring';
 }
 
+interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  color: string;
+  alpha: number;
+}
+
 export const RocketCanvas: React.FC<RocketCanvasProps> = ({
   phase,
   multiplier,
@@ -61,14 +71,38 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
   shieldSavedBet,
   equippedSkinId,
   jackpotPool,
+  onOpenGarage,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const starsRef = useRef<Star[]>([]);
   const warpLinesRef = useRef<WarpLine[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const shockwavesRef = useRef<Shockwave[]>([]);
   const shakeRef = useRef<{ x: number; y: number; intensity: number }>({ x: 0, y: 0, intensity: 0 });
   const prevPhaseRef = useRef<GamePhase>(phase);
   const prevCashedOutRef = useRef<boolean>(userCashedOut);
+  const lastMilestoneRef = useRef<number>(1);
+
+  // Synchronized refs for continuous, stutter-free 60/120 FPS canvas loop
+  const phaseRef = useRef<GamePhase>(phase);
+  const multiplierRef = useRef<number>(multiplier);
+  const countdownRef = useRef<number>(countdown);
+  const userBetRef = useRef<number>(userBet);
+  const userCashedOutRef = useRef<boolean>(userCashedOut);
+  const userCashoutMultiplierRef = useRef<number | undefined>(userCashoutMultiplier);
+  const crashMultiplierRef = useRef<number | undefined>(crashMultiplier);
+  const activeEventRef = useRef<ActiveFlightEvent | null | undefined>(activeEvent);
+  const equippedSkinIdRef = useRef<RocketSkinId | undefined>(equippedSkinId);
+
+  phaseRef.current = phase;
+  multiplierRef.current = multiplier;
+  countdownRef.current = countdown;
+  userBetRef.current = userBet;
+  userCashedOutRef.current = userCashedOut;
+  userCashoutMultiplierRef.current = userCashoutMultiplier;
+  crashMultiplierRef.current = crashMultiplier;
+  activeEventRef.current = activeEvent;
+  equippedSkinIdRef.current = equippedSkinId;
 
   const currentStage = getAltitudeStage(phase === 'CRASHED' ? (crashMultiplier || multiplier) : multiplier);
 
@@ -92,19 +126,30 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     if (prevPhaseRef.current !== 'CRASHED' && phase === 'CRASHED') {
       const canvas = canvasRef.current;
       if (canvas) {
-        const w = canvas.width;
-        const h = canvas.height;
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
         const rocketPos = getRocketPosition(multiplier, w, h);
         
-        shakeRef.current.intensity = 26;
+        shakeRef.current.intensity = 30;
+
+        // Big fiery explosion shockwave ring
+        shockwavesRef.current.push({
+          x: rocketPos.x,
+          y: rocketPos.y,
+          radius: 12,
+          maxRadius: Math.min(w * 0.45, 240),
+          color: '#EF4444',
+          alpha: 1.0,
+        });
 
         // Explosion particle color matching equipped skin
         const skin = getSkinById(equippedSkinId || 'STANDARD');
         const colors = [...skin.particleColorHex, '#FFFFFF', '#EF4444', '#F97316'];
 
-        for (let i = 0; i < 150; i++) {
+        for (let i = 0; i < 160; i++) {
           const angle = Math.random() * Math.PI * 2;
-          const speed = Math.random() * 10 + 2;
+          const speed = Math.random() * 12 + 2;
           const pType = equippedSkinId === 'DRAGONFIRE' && Math.random() > 0.5 ? 'star' : 'explosion';
 
           particlesRef.current.push({
@@ -113,7 +158,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
             vx: Math.cos(angle) * speed,
             vy: Math.sin(angle) * speed,
             life: 1,
-            maxLife: Math.random() * 45 + 30,
+            maxLife: Math.random() * 50 + 30,
             size: Math.random() * 8 + 3,
             color: colors[Math.floor(Math.random() * colors.length)],
             type: pType,
@@ -126,7 +171,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
 
   // Calculate rocket trajectory coordinate based on multiplier
   function getRocketPosition(currentMult: number, width: number, height: number) {
-    if (phase === 'COUNTDOWN') {
+    if (phaseRef.current === 'COUNTDOWN') {
       return { x: width * 0.12, y: height * 0.82, angle: -0.2 };
     }
 
@@ -196,6 +241,12 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     window.addEventListener('resize', resize);
 
     const render = () => {
+      const curPhase = phaseRef.current;
+      const curMult = multiplierRef.current;
+      const curCountdown = countdownRef.current;
+      const curSkinId = equippedSkinIdRef.current || 'STANDARD';
+      const curEvent = activeEventRef.current;
+
       const rect = canvas.getBoundingClientRect();
       const w = rect.width;
       const h = rect.height;
@@ -207,8 +258,8 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
         offsetX = (Math.random() - 0.5) * shakeRef.current.intensity;
         offsetY = (Math.random() - 0.5) * shakeRef.current.intensity;
         shakeRef.current.intensity *= 0.92;
-      } else if (phase === 'FLYING' && multiplier > 4) {
-        const subtleTremble = Math.min((multiplier - 4) * 0.35, 4.0);
+      } else if (curPhase === 'FLYING' && curMult > 4) {
+        const subtleTremble = Math.min((curMult - 4) * 0.35, 4.0);
         offsetX = (Math.random() - 0.5) * subtleTremble;
         offsetY = (Math.random() - 0.5) * subtleTremble;
       }
@@ -221,16 +272,16 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.fillRect(-20, -20, w + 40, h + 40);
 
       // Cosmic Atmosphere Gradient based on multiplier
-      drawCosmicNebula(ctx, w, h, multiplier);
+      drawCosmicNebula(ctx, w, h, curMult, curSkinId);
 
       // 2. Celestial background bodies (Earth, Moon, Mars)
-      drawCelestialBodies(ctx, w, h, multiplier);
+      drawCelestialBodies(ctx, w, h, curMult);
 
       // 3. Stars rendering with parallax speed
-      const starSpeedFactor = phase === 'FLYING' ? Math.min(1 + Math.log(multiplier) * 2.2, 10) : 0.4;
+      const starSpeedFactor = curPhase === 'FLYING' ? Math.min(1 + Math.log(curMult) * 2.2, 10) : 0.4;
       ctx.fillStyle = '#ffffff';
       starsRef.current.forEach(star => {
-        if (phase === 'FLYING') {
+        if (curPhase === 'FLYING') {
           star.x -= star.speed * starSpeedFactor * 0.45;
           star.y += star.speed * starSpeedFactor * 0.75;
           if (star.x < 0) star.x = w;
@@ -245,24 +296,66 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       ctx.globalAlpha = 1.0;
 
       // Warp speed lines above 25x
-      if (phase === 'FLYING' && multiplier >= 25) {
-        drawWarpLines(ctx, w, h, multiplier);
+      if (curPhase === 'FLYING' && curMult >= 25) {
+        drawWarpLines(ctx, w, h, curMult);
       }
 
-      // 4. Grid & Trajectory Curve
-      drawGrid(ctx, w, h);
+      // 4. Grid & Telemetry Altitude Scale
+      drawGrid(ctx, w, h, curMult);
 
       // 5. Trajectory Path & Custom Thruster Particles
-      const rocketPos = getRocketPosition(multiplier, w, h);
+      const rocketPos = getRocketPosition(curMult, w, h);
 
-      if (phase === 'FLYING') {
-        drawTrajectory(ctx, w, h, rocketPos, multiplier);
+      // Milestone Sonic Boom Detection
+      if (curPhase === 'COUNTDOWN') {
+        lastMilestoneRef.current = 1;
+      } else if (curPhase === 'FLYING') {
+        const milestones = [2, 5, 10, 25, 50, 100, 250, 500];
+        for (const m of milestones) {
+          if (curMult >= m && lastMilestoneRef.current < m) {
+            lastMilestoneRef.current = m;
+            shockwavesRef.current.push({
+              x: rocketPos.x,
+              y: rocketPos.y,
+              radius: 12,
+              maxRadius: Math.min(w * 0.4, 200),
+              color: m >= 50 ? '#FBBF24' : m >= 10 ? '#C084FC' : m >= 5 ? '#34D399' : '#38BDF8',
+              alpha: 0.95,
+            });
+            break;
+          }
+        }
+      }
+
+      // Draw expanding sonic boom shockwaves
+      for (let i = shockwavesRef.current.length - 1; i >= 0; i--) {
+        const sw = shockwavesRef.current[i];
+        sw.radius += 5.5;
+        sw.alpha *= 0.93;
+        if (sw.alpha <= 0.02 || sw.radius >= sw.maxRadius) {
+          shockwavesRef.current.splice(i, 1);
+          continue;
+        }
+        ctx.save();
+        ctx.strokeStyle = sw.color;
+        ctx.globalAlpha = sw.alpha;
+        ctx.lineWidth = 3;
+        ctx.shadowColor = sw.color;
+        ctx.shadowBlur = 16;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      if (curPhase === 'FLYING') {
+        drawTrajectory(ctx, w, h, rocketPos, curMult, curSkinId);
 
         // Spawn custom rocket thruster particles based on equipped skin
         const exhaustX = rocketPos.x - Math.cos(rocketPos.angle) * 24;
         const exhaustY = rocketPos.y - Math.sin(rocketPos.angle) * 24;
 
-        const skin = getSkinById(equippedSkinId || 'STANDARD');
+        const skin = getSkinById(curSkinId);
         const pColors = skin.particleColorHex;
 
         // Custom particle generation per skin
@@ -272,11 +365,11 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
           const pSpeed = Math.random() * 4.5 + 2;
 
           let particleType: 'flame' | 'star' | 'ring' | 'spark' = 'flame';
-          if (equippedSkinId === 'DRAGONFIRE' && Math.random() > 0.4) {
+          if (curSkinId === 'DRAGONFIRE' && Math.random() > 0.4) {
             particleType = 'star';
-          } else if (equippedSkinId === 'UFO_ALIEN' && Math.random() > 0.6) {
+          } else if (curSkinId === 'UFO_ALIEN' && Math.random() > 0.6) {
             particleType = 'ring';
-          } else if (equippedSkinId === 'CYBERPUNK' && Math.random() > 0.5) {
+          } else if (curSkinId === 'CYBERPUNK' && Math.random() > 0.5) {
             particleType = 'spark';
           }
 
@@ -302,7 +395,7 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
             life: 1,
             maxLife: Math.random() * 35 + 25,
             size: Math.random() * 10 + 6,
-            color: equippedSkinId === 'CYBERPUNK' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(148, 163, 184, 0.35)',
+            color: curSkinId === 'CYBERPUNK' ? 'rgba(168, 85, 247, 0.25)' : 'rgba(148, 163, 184, 0.35)',
             type: 'smoke',
           });
         }
@@ -312,37 +405,37 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       updateAndDrawParticles(ctx);
 
       // 7. Draw Active Event Visuals
-      if (activeEvent && phase === 'FLYING') {
-        if (activeEvent.type === 'WARP_NITRO') {
+      if (curEvent && curPhase === 'FLYING') {
+        if (curEvent.type === 'WARP_NITRO') {
           drawWarpLines(ctx, w, h, 95);
-        } else if (activeEvent.type === 'ENGINE_OVERHEAT') {
+        } else if (curEvent.type === 'ENGINE_OVERHEAT') {
           const alpha = (0.5 + 0.5 * Math.sin(Date.now() * 0.012)) * 0.45;
           ctx.save();
           ctx.strokeStyle = `rgba(239, 68, 68, ${alpha})`;
           ctx.lineWidth = 14;
           ctx.strokeRect(0, 0, w, h);
           ctx.restore();
-        } else if (activeEvent.type === 'COSMIC_AIRDROP') {
+        } else if (curEvent.type === 'COSMIC_AIRDROP') {
           drawCosmicCrate(ctx, w, h);
-        } else if (activeEvent.type === 'LUCKY_ENVELOPE') {
+        } else if (curEvent.type === 'LUCKY_ENVELOPE') {
           drawLuckyEnvelope(ctx, w, h);
-        } else if (activeEvent.type === 'BLACK_HOLE_GRAVITY') {
+        } else if (curEvent.type === 'BLACK_HOLE_GRAVITY') {
           drawBlackHole(ctx, w, h);
-        } else if (activeEvent.type === 'VIP_DIAMOND_CHEST') {
+        } else if (curEvent.type === 'VIP_DIAMOND_CHEST') {
           drawDiamondChest(ctx, w, h);
-        } else if (activeEvent.type === 'COSMIC_JACKPOT_RAIN') {
+        } else if (curEvent.type === 'COSMIC_JACKPOT_RAIN') {
           drawShootingStars(ctx, w, h);
-        } else if (activeEvent.type === 'SOLAR_FLARE_BOOST') {
+        } else if (curEvent.type === 'SOLAR_FLARE_BOOST') {
           drawSolarFlare(ctx, w, h);
         }
       }
 
       // 8. Draw Custom Rocket Ship Model
-      if (phase !== 'CRASHED') {
-        drawRocket(ctx, rocketPos.x, rocketPos.y, rocketPos.angle, phase === 'FLYING', multiplier);
+      if (curPhase !== 'CRASHED') {
+        drawRocket(ctx, rocketPos.x, rocketPos.y, rocketPos.angle, curPhase === 'FLYING', curMult, curSkinId);
 
         // Draw Alien Shield bubble if active
-        if (activeEvent && activeEvent.type === 'ALIEN_SHIELD' && phase === 'FLYING') {
+        if (curEvent && curEvent.type === 'ALIEN_SHIELD' && curPhase === 'FLYING') {
           drawAlienShield(ctx, rocketPos.x, rocketPos.y);
         }
       } else {
@@ -360,11 +453,11 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
     };
-  }, [phase, multiplier, equippedSkinId]);
+  }, []);
 
   // Cosmic Nebula atmosphere
-  function drawCosmicNebula(ctx: CanvasRenderingContext2D, w: number, h: number, mult: number) {
-    const skin = getSkinById(equippedSkinId || 'STANDARD');
+  function drawCosmicNebula(ctx: CanvasRenderingContext2D, w: number, h: number, mult: number, skinId: RocketSkinId = 'STANDARD') {
+    const skin = getSkinById(skinId);
     const primaryGlow = skin.glowColor || '#EF4444';
 
     if (mult < 6) {
@@ -462,31 +555,68 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.restore();
   }
 
-  // Draw coordinate grid
-  function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number) {
-    ctx.strokeStyle = 'rgba(51, 65, 85, 0.25)';
-    ctx.lineWidth = 1;
+  // Draw aerospace telemetry coordinate grid with active altitude scale
+  function drawGrid(ctx: CanvasRenderingContext2D, w: number, h: number, curMult: number = 1.0) {
+    ctx.save();
 
-    const lines = [0.25, 0.45, 0.65, 0.85];
-    lines.forEach(ratio => {
+    // Altitude telemetry levels
+    const altitudeLevels = [
+      { mult: 50.0, label: '50.0x', yRatio: 0.18 },
+      { mult: 20.0, label: '20.0x', yRatio: 0.30 },
+      { mult: 10.0, label: '10.0x', yRatio: 0.42 },
+      { mult: 5.0,  label: '5.0x',  yRatio: 0.54 },
+      { mult: 2.0,  label: '2.0x',  yRatio: 0.66 },
+      { mult: 1.2,  label: '1.2x',  yRatio: 0.78 },
+    ];
+
+    altitudeLevels.forEach(lvl => {
+      const y = h * lvl.yRatio;
+      const isReached = curMult >= lvl.mult;
+
       ctx.beginPath();
-      ctx.moveTo(w * 0.05, h * ratio);
-      ctx.lineTo(w * 0.95, h * ratio);
+      ctx.strokeStyle = isReached ? 'rgba(56, 189, 248, 0.28)' : 'rgba(51, 65, 85, 0.15)';
+      ctx.lineWidth = isReached ? 1.2 : 0.8;
+      ctx.setLineDash([4, 6]);
+      ctx.moveTo(w * 0.05, y);
+      ctx.lineTo(w * 0.92, y);
       ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Right-side telemetry pill
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      if (isReached) {
+        ctx.fillStyle = lvl.mult >= 20 ? '#C084FC' : lvl.mult >= 10 ? '#38BDF8' : '#34D399';
+        ctx.shadowColor = ctx.fillStyle;
+        ctx.shadowBlur = 8;
+      } else {
+        ctx.fillStyle = '#475569';
+        ctx.shadowBlur = 0;
+      }
+      ctx.fillText(lvl.label, w * 0.97, y);
+      ctx.shadowBlur = 0;
     });
 
-    ctx.strokeStyle = 'rgba(71, 85, 105, 0.6)';
+    // Launch ground baseline
+    ctx.strokeStyle = 'rgba(71, 85, 105, 0.5)';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(w * 0.05, h * 0.86);
     ctx.lineTo(w * 0.95, h * 0.86);
     ctx.stroke();
 
-    ctx.fillStyle = '#334155';
-    ctx.fillRect(w * 0.08, h * 0.86, w * 0.12, 6);
-    ctx.fillStyle = '#10B981';
-    ctx.fillRect(w * 0.10, h * 0.85, 4, 3);
-    ctx.fillRect(w * 0.17, h * 0.85, 4, 3);
+    // Launch pad indicator
+    ctx.fillStyle = '#1E293B';
+    ctx.fillRect(w * 0.08, h * 0.855, w * 0.10, 5);
+    const pulseLight = Math.sin(Date.now() * 0.005) > 0 ? '#10B981' : '#059669';
+    ctx.fillStyle = pulseLight;
+    ctx.beginPath();
+    ctx.arc(w * 0.09, h * 0.84, 2.5, 0, Math.PI * 2);
+    ctx.arc(w * 0.17, h * 0.84, 2.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
   }
 
   // Draw glowing trajectory ribbon
@@ -495,12 +625,13 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     w: number,
     h: number,
     rocketPos: { x: number; y: number },
-    mult: number
+    mult: number,
+    skinId: RocketSkinId = 'STANDARD'
   ) {
     const startX = w * 0.12;
     const startY = h * 0.82;
 
-    const skin = getSkinById(equippedSkinId || 'STANDARD');
+    const skin = getSkinById(skinId);
     const trajColor = skin.trailColorHex[0] || (mult >= 20 ? '#A855F7' : mult >= 6 ? '#06B6D4' : '#F59E0B');
 
     const gradArea = ctx.createLinearGradient(0, startY, 0, rocketPos.y);
@@ -601,13 +732,12 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     y: number,
     angle: number,
     isFiring: boolean,
-    mult: number
+    mult: number,
+    skinId: RocketSkinId = 'STANDARD'
   ) {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
-
-    const skinId = equippedSkinId || 'STANDARD';
 
     switch (skinId) {
       case 'CYBERPUNK':
@@ -1273,11 +1403,34 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
       <div className="relative z-10 flex flex-col items-center pointer-events-none px-4 text-center">
         {phase === 'COUNTDOWN' && (
           <div className="flex flex-col items-center animate-in fade-in zoom-in-95 duration-200">
-            <span className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-1">
+            <span className="text-xs uppercase tracking-widest text-slate-400 font-semibold mb-2">
               Chuẩn bị phóng trong
             </span>
-            <div className="relative flex items-center justify-center w-24 h-24 rounded-full border-4 border-amber-500/40 bg-slate-900/80 backdrop-blur-md shadow-lg shadow-amber-500/10">
-              <span className="text-3xl font-display font-bold text-amber-400 font-mono-numbers">
+            <div className="relative flex items-center justify-center w-28 h-28">
+              {/* Single, smooth SVG Progress Gauge */}
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  className="stroke-slate-800/80"
+                  strokeWidth="5"
+                  fill="rgba(15, 23, 42, 0.75)"
+                />
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="42"
+                  className="stroke-amber-400 transition-all duration-100 ease-linear"
+                  strokeWidth="5"
+                  fill="none"
+                  strokeDasharray={263.89}
+                  strokeDashoffset={263.89 * (1 - Math.max(0, Math.min(1, countdown / 5.0)))}
+                  strokeLinecap="round"
+                  style={{ filter: 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.7))' }}
+                />
+              </svg>
+              <span className="absolute text-3xl font-display font-black text-amber-400 font-mono-numbers drop-shadow-md">
                 {countdown.toFixed(1)}s
               </span>
             </div>
@@ -1294,10 +1447,10 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
         )}
 
         {phase === 'FLYING' && (
-          <div className="flex flex-col items-center animate-in fade-in duration-150">
+          <div className="flex flex-col items-center animate-in fade-in duration-150 pointer-events-auto">
             {/* Surprise Flight Event Banner */}
             {activeEvent && (
-              <div className="mb-3 animate-in slide-in-from-top-3 duration-200">
+              <div className="mb-3 animate-in slide-in-from-top-3 duration-200 pointer-events-auto z-30">
                 {activeEvent.type === 'COSMIC_AIRDROP' ||
                 activeEvent.type === 'LUCKY_ENVELOPE' ||
                 activeEvent.type === 'COSMIC_JACKPOT_RAIN' ||
@@ -1305,30 +1458,36 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
                   !activeEvent.rewardClaimed ? (
                     <button
                       type="button"
-                      onClick={() => onClaimEventReward?.(activeEvent)}
-                      className={`px-4 py-2 rounded-xl font-black text-xs md:text-sm flex items-center gap-2 shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer border-2 animate-bounce ${
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (activeEvent && onClaimEventReward) {
+                          onClaimEventReward(activeEvent);
+                        }
+                      }}
+                      className={`px-5 py-2.5 rounded-xl font-black text-xs md:text-sm flex items-center gap-2 shadow-2xl transition-all hover:scale-110 active:scale-95 cursor-pointer border-2 animate-bounce pointer-events-auto z-30 select-none ${
                         activeEvent.type === 'VIP_DIAMOND_CHEST'
-                          ? 'bg-gradient-to-r from-cyan-500 via-sky-400 to-blue-600 text-white border-cyan-200 shadow-cyan-500/50'
+                          ? 'bg-gradient-to-r from-cyan-500 via-sky-400 to-blue-600 text-white border-cyan-200 shadow-cyan-500/80 hover:brightness-125'
                           : activeEvent.type === 'COSMIC_JACKPOT_RAIN'
-                          ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 border-yellow-100 shadow-amber-500/50'
+                          ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 border-yellow-100 shadow-amber-500/80 hover:brightness-125'
                           : activeEvent.type === 'COSMIC_AIRDROP'
-                          ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 text-white border-emerald-200 shadow-emerald-500/50'
-                          : 'bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 text-white border-yellow-300 shadow-red-500/50'
+                          ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 text-white border-emerald-200 shadow-emerald-500/80 hover:brightness-125'
+                          : 'bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 text-white border-yellow-300 shadow-red-500/80 hover:brightness-125'
                       }`}
                     >
-                      <span className="text-base">
+                      <span className="text-lg">
                         {activeEvent.type === 'VIP_DIAMOND_CHEST' && '💎'}
                         {activeEvent.type === 'COSMIC_JACKPOT_RAIN' && '⭐'}
                         {activeEvent.type === 'COSMIC_AIRDROP' && '🎁'}
                         {activeEvent.type === 'LUCKY_ENVELOPE' && '🧧'}
                       </span>
-                      <span>{activeEvent.title} (+{activeEvent.rewardAmount?.toLocaleString('vi-VN')} Xu)</span>
-                      <span className="bg-slate-950/30 px-2 py-0.5 rounded text-[11px] font-black underline tracking-wide">
+                      <span className="font-bold">{activeEvent.title} (+{activeEvent.rewardAmount?.toLocaleString('vi-VN')} Xu)</span>
+                      <span className="bg-slate-950/40 px-2.5 py-1 rounded-lg text-[11px] font-black underline tracking-wider uppercase text-yellow-300 border border-yellow-400/30">
                         BẤM NHẬN!
                       </span>
                     </button>
                   ) : (
-                    <div className="px-3.5 py-1.5 rounded-full bg-emerald-950/90 border border-emerald-400 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-md">
+                    <div className="px-4 py-2 rounded-full bg-emerald-950/90 border border-emerald-400 text-emerald-300 text-xs font-bold flex items-center gap-1.5 shadow-lg pointer-events-auto">
                       <span>✨ Đã nhận thành công +{activeEvent.rewardAmount?.toLocaleString('vi-VN')} Xu vào ví!</span>
                     </div>
                   )
@@ -1439,37 +1598,48 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
         )}
       </div>
 
-      {/* Jackpot Pool HUD Banner */}
-      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-gradient-to-r from-amber-950/90 via-slate-900/95 to-amber-950/90 border border-amber-500/60 rounded-full px-4 py-1.5 shadow-lg shadow-amber-500/20 backdrop-blur-md">
-        <Trophy className="w-4 h-4 text-amber-400 animate-bounce" />
-        <div className="flex items-center gap-1.5 text-xs">
-          <span className="font-extrabold text-amber-300 tracking-wide uppercase text-[11px]">Hũ Jackpot:</span>
-          <span className="font-mono-numbers font-black text-amber-400 text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
-            {(jackpotPool || 15850000).toLocaleString('vi-VN')}
-          </span>
-          <span className="text-[10px] font-bold text-amber-500">Xu</span>
-        </div>
-      </div>
-
-      {/* Corner telemetry info */}
-      <div className="absolute top-3 left-4 z-10 flex items-center gap-2 text-xs text-slate-400 font-mono-numbers">
-        <span className="flex items-center gap-1.5">
+      {/* Top HUD Header inside Rocket Arena: Clean, Responsive Flex Layout */}
+      <div className="absolute top-2.5 inset-x-2.5 sm:inset-x-4 z-20 flex items-center justify-between gap-1.5 sm:gap-3 pointer-events-none">
+        {/* Left: Status badge */}
+        <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-900/85 border border-slate-800 text-[11px] text-slate-300 font-mono-numbers backdrop-blur-md shrink-0 shadow-sm">
           <span
             className={`w-2 h-2 rounded-full ${
               phase === 'FLYING'
                 ? 'bg-emerald-500 animate-pulse'
                 : phase === 'CRASHED'
                 ? 'bg-red-500'
-                : 'bg-amber-400'
+                : 'bg-amber-400 animate-pulse'
             }`}
           />
-          {phase === 'FLYING' ? 'ĐANG BAY' : phase === 'CRASHED' ? 'ĐÃ NỔ' : 'CHỜ PHÓNG'}
-        </span>
-      </div>
+          <span className="font-bold">
+            {phase === 'FLYING' ? 'ĐANG BAY' : phase === 'CRASHED' ? 'ĐÃ NỔ' : 'CHỜ PHÓNG'}
+          </span>
+        </div>
 
-      <div className="absolute top-3 right-4 z-10 text-xs text-slate-400 font-mono-numbers hidden sm:flex items-center gap-2">
-        <span className="text-slate-500 font-medium">Trang Phục:</span>
-        <span className="text-amber-400 font-bold">{getSkinById(equippedSkinId || 'STANDARD').name}</span>
+        {/* Center: Jackpot Pool Capsule */}
+        <div className="flex items-center gap-1 sm:gap-1.5 bg-gradient-to-r from-amber-950/90 via-slate-900/95 to-amber-950/90 border border-amber-500/60 rounded-full px-2.5 sm:px-3.5 py-1 shadow-md shadow-amber-500/15 backdrop-blur-md min-w-0">
+          <Trophy className="w-3.5 h-3.5 text-amber-400 shrink-0 animate-bounce" />
+          <div className="flex items-center gap-1 text-[11px] sm:text-xs truncate">
+            <span className="font-extrabold text-amber-300 uppercase hidden xs:inline">Hũ:</span>
+            <span className="font-mono-numbers font-black text-amber-400 text-xs sm:text-sm drop-shadow-[0_0_8px_rgba(251,191,36,0.6)]">
+              {(jackpotPool || 18500000).toLocaleString('vi-VN')}
+            </span>
+            <span className="text-[10px] font-bold text-amber-500">Xu</span>
+          </div>
+        </div>
+
+        {/* Right: Gara Button */}
+        <button
+          type="button"
+          onClick={onOpenGarage}
+          className="pointer-events-auto flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 hover:border-amber-500/60 text-xs text-amber-300 font-bold shadow-md active:scale-95 transition-all cursor-pointer backdrop-blur-md shrink-0"
+          title="Mở Gara & Đổi Skin Tên Lửa"
+        >
+          <span className="text-sm">{getSkinById(equippedSkinId || 'STANDARD').icon}</span>
+          <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1 py-0.2 rounded font-black border border-amber-500/30">
+            GARA
+          </span>
+        </button>
       </div>
     </div>
   );

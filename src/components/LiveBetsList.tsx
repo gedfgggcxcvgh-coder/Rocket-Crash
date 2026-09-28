@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { PlayerBet } from '../types/game';
-import { Users, CheckCircle2, XCircle } from 'lucide-react';
+import { Users, CheckCircle2, XCircle, User } from 'lucide-react';
 
 interface LiveBetsListProps {
   players: PlayerBet[];
@@ -8,8 +8,14 @@ interface LiveBetsListProps {
 }
 
 export const LiveBetsList: React.FC<LiveBetsListProps> = ({ players, currentMultiplier }) => {
+  const [tab, setTab] = useState<'all' | 'my'>('all');
+
   const totalWagered = players.reduce((acc, p) => acc + p.betAmount, 0);
   const cashedOutCount = players.filter(p => p.status === 'WON').length;
+
+  const displayedPlayers = tab === 'my' 
+    ? players.filter(p => p.isCurrentUser) 
+    : players;
 
   return (
     <div className="w-full bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 p-4 flex flex-col h-full shadow-lg">
@@ -27,14 +33,43 @@ export const LiveBetsList: React.FC<LiveBetsListProps> = ({ players, currentMult
         </div>
       </div>
 
+      {/* Segmented Filter Control */}
+      <div className="flex items-center gap-1 p-1 bg-slate-950/70 border border-slate-800/80 rounded-xl mb-2.5">
+        <button
+          type="button"
+          onClick={() => setTab('all')}
+          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            tab === 'all'
+              ? 'bg-slate-800 text-white shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          <span>Tất Cả ({players.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setTab('my')}
+          className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+            tab === 'my'
+              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <User className="w-3.5 h-3.5" />
+          <span>Cược Của Tôi ({players.filter(p => p.isCurrentUser).length})</span>
+        </button>
+      </div>
+
       {/* Players List */}
       <div className="flex-1 overflow-y-auto space-y-2 pr-1 max-h-[380px]">
-        {players.length === 0 ? (
+        {displayedPlayers.length === 0 ? (
           <div className="py-8 text-center text-xs text-slate-500">
-            Chưa có người chơi nào tham gia vòng này.
+            {tab === 'my' ? 'Bạn chưa đặt cược ván này.' : 'Chưa có người chơi nào tham gia vòng này.'}
           </div>
         ) : (
-          players.map(player => {
+          displayedPlayers.map(player => {
             const isWon = player.status === 'WON';
             const isLost = player.status === 'LOST';
 
@@ -98,9 +133,11 @@ export const LiveBetsList: React.FC<LiveBetsListProps> = ({ players, currentMult
                   ) : (
                     <div className="flex flex-col items-end">
                       <span className="text-amber-400/80 font-bold font-mono-numbers animate-pulse">
-                        {currentMultiplier.toFixed(2)}x...
+                        {currentMultiplier.toFixed(2)}x
                       </span>
-                      <span className="text-[11px] text-slate-500">Đang bay</span>
+                      <span className="text-[11px] text-slate-400 font-mono-numbers">
+                        Đang bay...
+                      </span>
                     </div>
                   )}
                 </div>
@@ -113,7 +150,7 @@ export const LiveBetsList: React.FC<LiveBetsListProps> = ({ players, currentMult
       {/* Footer stats */}
       <div className="pt-3 border-t border-slate-800/80 text-[11px] text-slate-400 flex items-center justify-between">
         <span>Đã chốt lời: {cashedOutCount}/{players.length} người</span>
-        <span className="text-slate-500">Mô phỏng sảnh cộng đồng</span>
+        <span className="text-emerald-400 font-semibold font-mono">Trực tuyến</span>
       </div>
     </div>
   );

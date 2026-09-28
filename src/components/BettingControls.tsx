@@ -79,22 +79,32 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
           <button
             type="button"
             onClick={onCashout}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-emerald-500/30 active:scale-[0.98] animate-pulse cursor-pointer flex flex-col items-center justify-center leading-tight"
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-500 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-sm tracking-wide transition-all shadow-xl shadow-emerald-500/40 active:scale-[0.98] ring-2 ring-emerald-300/60 animate-pulse cursor-pointer flex flex-col items-center justify-center leading-tight group"
           >
             <div className="flex items-center gap-1.5">
               <span>CHỐT LÃI NGAY</span>
-              <ArrowUpRight className="w-4 h-4 stroke-[3]" />
+              <span className="text-[9px] bg-slate-950 text-emerald-400 px-1 py-0.5 rounded font-mono font-bold">
+                SPACE
+              </span>
+              <ArrowUpRight className="w-4 h-4 stroke-[3] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </div>
-            <span className="text-[11px] opacity-90 font-mono-numbers">
-              +{projectedWin.toLocaleString('vi-VN')} Xu ({currentMultiplier.toFixed(2)}x)
-            </span>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-xs font-black font-mono-numbers text-slate-950">
+                +{projectedWin.toLocaleString('vi-VN')} Xu
+              </span>
+              <span className="text-[10px] bg-emerald-950/20 px-1 rounded text-slate-900 font-bold">
+                (Lãi +{(projectedWin - userBet).toLocaleString('vi-VN')} Xu • {currentMultiplier.toFixed(2)}x)
+              </span>
+            </div>
           </button>
         )}
 
         {phase === 'FLYING' && userBet > 0 && userCashedOut && (
-          <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-400 font-extrabold text-xs text-center flex flex-col items-center justify-center">
-            <span className="text-[10px] uppercase font-bold text-emerald-500">Đã Chốt Lãi Thành Công</span>
-            <span className="font-mono-numbers text-sm text-white">
+          <div className="w-full py-2.5 px-3 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-emerald-400 font-extrabold text-xs text-center flex flex-col items-center justify-center shadow-lg shadow-emerald-500/10">
+            <span className="text-[10px] uppercase font-bold text-emerald-400 flex items-center gap-1">
+              ✨ ĐÃ CHỐT LÃI THÀNH CÔNG
+            </span>
+            <span className="font-mono-numbers text-sm text-white font-bold">
               +{Math.floor(userBet * (userCashoutMultiplier || 1.0)).toLocaleString('vi-VN')} Xu ({userCashoutMultiplier?.toFixed(2)}x)
             </span>
           </div>
@@ -118,11 +128,14 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
             type="button"
             disabled={balance < numericBet || numericBet <= 0}
             onClick={() => onPlaceBet(numericBet)}
-            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 text-slate-950 font-black text-sm tracking-wide transition-all shadow-md shadow-amber-500/20 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2"
+            className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 hover:from-amber-400 hover:to-amber-300 disabled:opacity-40 text-slate-950 font-black text-sm tracking-wide transition-all shadow-md shadow-amber-500/20 active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 group"
           >
-            <Zap className="w-4 h-4 fill-slate-950" />
+            <Zap className="w-4 h-4 fill-slate-950 group-hover:scale-110 transition-transform" />
             <span>
               {phase === 'COUNTDOWN' ? 'ĐẶT CƯỢC VÁN NÀY' : 'ĐẶT CƯỢC VÁN SAU'}
+            </span>
+            <span className="text-[9px] bg-slate-950/20 text-slate-950 px-1 py-0.5 rounded font-mono font-bold">
+              SPACE
             </span>
           </button>
         )}
@@ -136,7 +149,7 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
             value={betInput}
             disabled={userBet > 0}
             onChange={e => setBetInput(e.target.value.replace(/[^0-9]/g, ''))}
-            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-3 pr-12 py-2 text-xs font-mono-numbers font-bold text-white focus:outline-none focus:border-amber-500 disabled:opacity-60"
+            className="w-full bg-slate-900 border border-slate-700/80 rounded-xl pl-3 pr-12 py-2 text-xs font-mono-numbers font-bold text-white focus:outline-none focus:border-amber-500 disabled:opacity-60 transition-colors"
             placeholder="Mức cược..."
           />
           <span className="absolute right-3 text-[10px] font-bold text-amber-400 pointer-events-none">
@@ -145,12 +158,21 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
         </div>
 
         {/* Quick Amount Buttons */}
-        <div className="grid grid-cols-4 gap-1">
+        <div className="grid grid-cols-6 gap-1">
+          <button
+            type="button"
+            disabled={userBet > 0}
+            onClick={() => handleQuickAdd(10000)}
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:text-white text-[10px] font-semibold text-slate-300 disabled:opacity-50 transition-colors"
+          >
+            +10K
+          </button>
+
           <button
             type="button"
             disabled={userBet > 0}
             onClick={() => handleQuickAdd(50000)}
-            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-slate-300 disabled:opacity-50"
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:text-white text-[10px] font-semibold text-slate-300 disabled:opacity-50 transition-colors"
           >
             +50K
           </button>
@@ -158,26 +180,35 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
           <button
             type="button"
             disabled={userBet > 0}
-            onClick={() => handleQuickAdd(200000)}
-            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-slate-300 disabled:opacity-50"
+            onClick={() => handleQuickAdd(100000)}
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 hover:text-white text-[10px] font-semibold text-slate-300 disabled:opacity-50 transition-colors"
           >
-            +200K
+            +100K
+          </button>
+
+          <button
+            type="button"
+            disabled={userBet > 0}
+            onClick={() => handleQuickMultiply(0.5)}
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-amber-400 disabled:opacity-50 transition-colors"
+          >
+            1/2
           </button>
 
           <button
             type="button"
             disabled={userBet > 0}
             onClick={() => handleQuickMultiply(2)}
-            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-amber-400 disabled:opacity-50"
+            className="py-1 rounded-lg bg-slate-900 border border-slate-800 hover:bg-slate-800 text-[10px] font-semibold text-amber-400 disabled:opacity-50 transition-colors"
           >
-            x2
+            2X
           </button>
 
           <button
             type="button"
             disabled={userBet > 0}
             onClick={() => setBetInput(balance.toString())}
-            className="py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[10px] font-extrabold text-amber-400 disabled:opacity-50"
+            className="py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-[10px] font-extrabold text-amber-400 disabled:opacity-50 transition-colors"
           >
             MAX
           </button>
