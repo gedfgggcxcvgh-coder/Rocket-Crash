@@ -59,33 +59,54 @@ const getGuestUserId = (): string => {
   return id;
 };
 
-const getStoredSkins = (userId: string): { equipped: RocketSkinId; unlocked: RocketSkinId[] } => {
-  if (typeof window === 'undefined') return { equipped: 'STANDARD', unlocked: ['STANDARD'] };
-  
-  const savedEquipped = (localStorage.getItem(`rocket_crash_equipped_skin_${userId}`) || localStorage.getItem('rocket_crash_equipped_skin')) as RocketSkinId;
-  const savedUnlockedRaw = localStorage.getItem(`rocket_crash_unlocked_skins_${userId}`) || localStorage.getItem('rocket_crash_unlocked_skins');
-  
-  let unlocked: RocketSkinId[] = ['STANDARD'];
-  if (savedUnlockedRaw) {
-    try {
-      const parsed = JSON.parse(savedUnlockedRaw);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        unlocked = Array.from(new Set(['STANDARD', ...parsed])) as RocketSkinId[];
-      }
-    } catch {}
-  }
+interface UserSkinPrefs {
+  equipped: RocketSkinId;
+  unlocked: RocketSkinId[];
+}
 
-  const equipped = (savedEquipped && unlocked.includes(savedEquipped)) ? savedEquipped : (unlocked[0] || 'STANDARD');
-  return { equipped, unlocked };
+const SKIN_PREFS_KEY = 'rocket_crash_user_skin_preferences';
+
+const getAllSkinPrefs = (): Record<string, UserSkinPrefs> => {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(SKIN_PREFS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
+};
+
+const getStoredSkins = (userId: string): UserSkinPrefs => {
+  const prefs = getAllSkinPrefs();
+  const userPref = prefs[userId] || prefs['global_fallback'];
+  
+  if (userPref) {
+    const unlocked = Array.isArray(userPref.unlocked) && userPref.unlocked.length > 0
+      ? Array.from(new Set(['STANDARD', ...userPref.unlocked])) as RocketSkinId[]
+      : ['STANDARD'];
+    const equipped = (userPref.equipped && unlocked.includes(userPref.equipped))
+      ? userPref.equipped
+      : 'STANDARD';
+    return { equipped, unlocked };
+  }
+  
+  return { equipped: 'STANDARD', unlocked: ['STANDARD'] };
 };
 
 const saveStoredSkins = (userId: string, equipped: RocketSkinId, unlocked: RocketSkinId[]) => {
   if (typeof window === 'undefined') return;
-  const cleanUnlocked = Array.from(new Set(['STANDARD', ...unlocked]));
-  localStorage.setItem(`rocket_crash_equipped_skin_${userId}`, equipped);
-  localStorage.setItem('rocket_crash_equipped_skin', equipped);
-  localStorage.setItem(`rocket_crash_unlocked_skins_${userId}`, JSON.stringify(cleanUnlocked));
-  localStorage.setItem('rocket_crash_unlocked_skins', JSON.stringify(cleanUnlocked));
+  const prefs = getAllSkinPrefs();
+  const cleanUnlocked = Array.from(new Set(['STANDARD', ...unlocked])) as RocketSkinId[];
+  const cleanEquipped = cleanUnlocked.includes(equipped) ? equipped : 'STANDARD';
+  
+  const payload: UserSkinPrefs = { equipped: cleanEquipped, unlocked: cleanUnlocked };
+  prefs[userId] = payload;
+  prefs['global_fallback'] = payload;
+  
+  try {
+    localStorage.setItem(SKIN_PREFS_KEY, JSON.stringify(prefs));
+  } catch (err) {
+    console.error('Failed to save skin prefs:', err);
+  }
 };
 
 export default function App() {
@@ -255,13 +276,10 @@ export default function App() {
         const newUser = getSavedDiscordUser();
         setDiscordUser(newUser);
       }
-      if (e.key === `rocket_crash_equipped_skin_${currentUserId}` || e.key === 'rocket_crash_equipped_skin') {
-        if (e.newValue) setEquippedSkin(e.newValue as RocketSkinId);
-      }
-      if (e.key === `rocket_crash_unlocked_skins_${currentUserId}` || e.key === 'rocket_crash_unlocked_skins') {
-        if (e.newValue) {
-          try { setUnlockedSkins(JSON.parse(e.newValue)); } catch {}
-        }
+      if (e.key === SKIN_PREFS_KEY) {
+        const skins = getStoredSkins(currentUserId);
+        setEquippedSkin(skins.equipped);
+        setUnlockedSkins(skins.unlocked);
       }
     };
 
