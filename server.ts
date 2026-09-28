@@ -480,19 +480,12 @@ async function startServer() {
     }
 
     const primaryUserId = userId.replace('_bet2', '');
+    const userRecord = getUserRecord(primaryUserId, username ? username.replace(' (Vé 2)', '') : undefined);
 
-    if (!userDatabase[primaryUserId]) {
-      userDatabase[primaryUserId] = {
-        id: primaryUserId,
-        username: username ? username.replace(' (Vé 2)', '') : 'Khách',
-        balance: 1000000,
-      };
-    }
-
-    if ((userDatabase[primaryUserId].balance || 0) < betAmount) {
+    if ((userRecord.balance || 0) < betAmount) {
       return res.status(400).json({ error: 'Không đủ số dư Xu.' });
     }
-    userDatabase[primaryUserId].balance -= betAmount;
+    userRecord.balance -= betAmount;
     globalJackpotPool += Math.floor(betAmount * 0.01);
 
     try {

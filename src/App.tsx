@@ -50,12 +50,42 @@ const INITIAL_CHATS: ChatMessage[] = [
 ];
 
 const getGuestUserId = (): string => {
+  if (typeof window === 'undefined') return 'guest';
   let id = localStorage.getItem('rocket_crash_guest_id');
   if (!id) {
     id = 'guest_' + Math.random().toString(36).substring(2, 10);
     localStorage.setItem('rocket_crash_guest_id', id);
   }
   return id;
+};
+
+const getStoredSkins = (userId: string): { equipped: RocketSkinId; unlocked: RocketSkinId[] } => {
+  if (typeof window === 'undefined') return { equipped: 'STANDARD', unlocked: ['STANDARD'] };
+  
+  const savedEquipped = (localStorage.getItem(`rocket_crash_equipped_skin_${userId}`) || localStorage.getItem('rocket_crash_equipped_skin')) as RocketSkinId;
+  const savedUnlockedRaw = localStorage.getItem(`rocket_crash_unlocked_skins_${userId}`) || localStorage.getItem('rocket_crash_unlocked_skins');
+  
+  let unlocked: RocketSkinId[] = ['STANDARD'];
+  if (savedUnlockedRaw) {
+    try {
+      const parsed = JSON.parse(savedUnlockedRaw);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        unlocked = Array.from(new Set(['STANDARD', ...parsed])) as RocketSkinId[];
+      }
+    } catch {}
+  }
+
+  const equipped = (savedEquipped && unlocked.includes(savedEquipped)) ? savedEquipped : (unlocked[0] || 'STANDARD');
+  return { equipped, unlocked };
+};
+
+const saveStoredSkins = (userId: string, equipped: RocketSkinId, unlocked: RocketSkinId[]) => {
+  if (typeof window === 'undefined') return;
+  const cleanUnlocked = Array.from(new Set(['STANDARD', ...unlocked]));
+  localStorage.setItem(`rocket_crash_equipped_skin_${userId}`, equipped);
+  localStorage.setItem('rocket_crash_equipped_skin', equipped);
+  localStorage.setItem(`rocket_crash_unlocked_skins_${userId}`, JSON.stringify(cleanUnlocked));
+  localStorage.setItem('rocket_crash_unlocked_skins', JSON.stringify(cleanUnlocked));
 };
 
 export default function App() {
@@ -103,27 +133,11 @@ export default function App() {
   const [showDuelModal, setShowDuelModal] = useState<boolean>(false);
   const [showDuelResultModal, setShowDuelResultModal] = useState<boolean>(false);
 
-  const [equippedSkin, setEquippedSkin] = useState<RocketSkinId>(() => {
-    const savedDiscord = getSavedDiscordUser();
-    const guestId = typeof window !== 'undefined' ? (localStorage.getItem('rocket_crash_guest_id') || 'guest') : 'guest';
-    const uId = savedDiscord ? savedDiscord.id : guestId;
-    const saved = localStorage.getItem(`rocket_crash_equipped_skin_${uId}`) || localStorage.getItem('rocket_crash_equipped_skin');
-    return (saved as RocketSkinId) || 'STANDARD';
-  });
+  const initialUserId = (typeof window !== 'undefined' && getSavedDiscordUser()) ? getSavedDiscordUser()!.id : getGuestUserId();
+  const initialSkins = getStoredSkins(initialUserId);
 
-  const [unlockedSkins, setUnlockedSkins] = useState<RocketSkinId[]>(() => {
-    const savedDiscord = getSavedDiscordUser();
-    const guestId = typeof window !== 'undefined' ? (localStorage.getItem('rocket_crash_guest_id') || 'guest') : 'guest';
-    const uId = savedDiscord ? savedDiscord.id : guestId;
-    const saved = localStorage.getItem(`rocket_crash_unlocked_skins_${uId}`) || localStorage.getItem('rocket_crash_unlocked_skins');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      } catch {}
-    }
-    return ['STANDARD'];
-  });
+  const [equippedSkin, setEquippedSkin] = useState<RocketSkinId>(initialSkins.equipped);
+  const [unlockedSkins, setUnlockedSkins] = useState<RocketSkinId[]>(initialSkins.unlocked);
 
   const [jackpotPool, setJackpotPool] = useState<number>(18500000);
   const [activeDuel, setActiveDuel] = useState<DuelState | null>(null);
@@ -175,16 +189,31 @@ export default function App() {
           if (serverData.stats) {
             setStats(prev => ({ ...prev, ...serverData.stats }));
           }
-          if (serverData.equippedSkin) {
-            setEquippedSkin(serverData.equippedSkin);
-            localStorage.setItem(`rocket_crash_equipped_skin_${currentUserId}`, serverData.equippedSkin);
-            localStorage.setItem('rocket_crash_equipped_skin', serverData.equippedSkin);
-          }
-          if (Array.isArray(serverData.unlockedSkins) && serverData.unlockedSkins.length > 0) {
-            setUnlockedSkins(serverData.unlockedSkins);
-            localStorage.setItem(`rocket_crash_unlocked_skins_${currentUserId}`, JSON.stringify(serverData.unlockedSkins));
-            localStorage.setItem('rocket_crash_unlocked_skins', JSON.stringify(serverData.unlockedSkins));
-          }
+
+          // Smart merge skins: Combine local stored skins with server skins
+          const localSkins = getStoredSkins(currentUserId);
+          const serverUnlocked = Array.isArray(serverData.unlockedSkins) ? serverData.unlockedSkins : ['STANDARD'];
+          const mergedUnlocked = Array.from(new Set([...localSkins.unlocked, ...serverUnlocked])) as RocketSkinId[];
+          
+          const serverEquipped = serverData.equippedSkin as RocketSkinId;
+          const finalEquipped = (localSkins.equipped && mergedUnlocked.includes(localSkins.equipped))
+            ? localSkins.equipped
+            : (serverEquipped && mergedUnlocked.includes(serverEquipped) ? serverEquipped : 'STANDARD');
+
+          setUnlockedSkins(mergedUnlocked);
+          setEquippedSkin(finalEquipped);
+          saveStoredSkins(currentUserId, finalEquipped, mergedUnlocked);
+
+          // Push merged skins to server to keep database in sync
+          fetch('/api/user/skin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUserId,
+              equippedSkin: finalEquipped,
+              unlockedSkins: mergedUnlocked,
+            }),
+          }).catch(() => {});
         }
       })
       .catch(() => {});
@@ -1214,14 +1243,13 @@ export default function App() {
     setEquippedSkin(skinId);
 
     // Save locally
-    localStorage.setItem(`rocket_crash_equipped_skin_${currentUserId}`, skinId);
-    localStorage.setItem('rocket_crash_equipped_skin', skinId);
+    saveStoredSkins(currentUserId, skinId, unlockedSkins);
 
     // Save to central user database on server
     fetch('/api/user/skin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: currentUserId, equippedSkin: skinId }),
+      body: JSON.stringify({ userId: currentUserId, equippedSkin: skinId, unlockedSkins }),
     }).catch(() => {});
 
     // Broadcast sync across tabs
@@ -1230,24 +1258,25 @@ export default function App() {
       userId: currentUserId,
       tabId: TAB_ID,
       equippedSkin: skinId,
+      unlockedSkins,
     });
   };
 
   const handleBuySkin = (skin: RocketSkin) => {
     if (balance < skin.price) return;
 
-    const nextUnlocked = Array.from(new Set([...unlockedSkins, skin.id]));
+    const nextUnlocked = Array.from(new Set([...unlockedSkins, skin.id])) as RocketSkinId[];
     const nextBalance = balance - skin.price;
 
     setBalance(nextBalance);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rocket_crash_guest_balance', nextBalance.toString());
+    }
     setUnlockedSkins(nextUnlocked);
     setEquippedSkin(skin.id);
 
     // Save locally
-    localStorage.setItem(`rocket_crash_equipped_skin_${currentUserId}`, skin.id);
-    localStorage.setItem('rocket_crash_equipped_skin', skin.id);
-    localStorage.setItem(`rocket_crash_unlocked_skins_${currentUserId}`, JSON.stringify(nextUnlocked));
-    localStorage.setItem('rocket_crash_unlocked_skins', JSON.stringify(nextUnlocked));
+    saveStoredSkins(currentUserId, skin.id, nextUnlocked);
 
     // Save to central user database on server
     fetch('/api/user/skin', {
