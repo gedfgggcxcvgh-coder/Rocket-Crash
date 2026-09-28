@@ -445,6 +445,30 @@ async function startServer() {
     res.json({ success: true, balance: record.balance });
   });
 
+  // POST /api/user/balance - Set or adjust balance directly from mini games
+  app.post('/api/user/balance', (req, res) => {
+    const { userId, balance, change, stats } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'Thiếu userId' });
+    }
+    const record = getUserRecord(userId);
+    if (typeof balance === 'number') {
+      record.balance = Math.max(0, Math.floor(balance));
+    } else if (typeof change === 'number') {
+      record.balance = Math.max(0, Math.floor((record.balance || 0) + change));
+    }
+    if (stats && typeof stats === 'object') {
+      record.stats = { ...(record.stats || {}), ...stats };
+    }
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch (err) {
+      console.error('Failed to save balance to user-database.json:', err);
+    }
+    broadcastGameState();
+    res.json({ success: true, balance: record.balance });
+  });
+
   // POST /api/user/skin - Save equipped skin and unlocked skins
   app.post('/api/user/skin', (req, res) => {
     const { userId, equippedSkin, unlockedSkins } = req.body;

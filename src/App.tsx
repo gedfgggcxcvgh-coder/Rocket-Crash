@@ -23,6 +23,7 @@ import { LeaderboardModal } from './components/LeaderboardModal';
 import { DuelModal } from './components/DuelModal';
 import { DuelBanner } from './components/DuelBanner';
 import { DuelResultModal } from './components/DuelResultModal';
+import { ComVaCutGame } from './components/ComVaCutGame';
 import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
 import { getSkinById } from './utils/skins';
 import confetti from 'canvas-confetti';
@@ -141,6 +142,9 @@ export default function App() {
   const [userCashoutMultiplier, setUserCashoutMultiplier] = useState<number | undefined>(undefined);
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
   const [autoCashoutTarget, setAutoCashoutTarget] = useState<number>(2.0);
+
+  // Game Hub active game ('ROCKET' | 'COM_CUT')
+  const [activeGame, setActiveGame] = useState<'ROCKET' | 'COM_CUT'>('ROCKET');
 
   // Dual Bet 2 (Gồng Đỉnh)
   const [userBet2, setUserBet2] = useState<number>(0);
@@ -1444,6 +1448,29 @@ export default function App() {
     }
   };
 
+  // Direct balance update for mini-games (e.g. Cơm & Cứt) with instant backend database sync
+  const handleDirectBalanceUpdate = useCallback(async (newBalance: number) => {
+    const finalBal = Math.max(0, Math.floor(newBalance));
+    setBalance(finalBal);
+    localStorage.setItem('rocket_crash_guest_balance', finalBal.toString());
+
+    if (discordUser) {
+      const updatedUser = { ...discordUser, balance: finalBal };
+      setDiscordUser(updatedUser);
+      localStorage.setItem('rocket_crash_discord_user', JSON.stringify(updatedUser));
+    }
+
+    try {
+      await fetch('/api/user/balance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: currentUserId, balance: finalBal }),
+      });
+    } catch (err) {
+      console.error('Failed to sync mini-game balance to server:', err);
+    }
+  }, [currentUserId, discordUser]);
+
   // Toggle Sound
   const toggleSound = () => {
     const next = !isMuted;
@@ -1535,45 +1562,74 @@ export default function App() {
       {/* TOP HEADER */}
       <header className="w-full border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl sticky top-0 z-40">
         <div className="max-w-[1440px] mx-auto px-3 sm:px-6 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveGame('ROCKET')}>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_#34d399] animate-pulse" />
-              <span className="text-lg font-black tracking-tight text-white font-display flex items-center gap-1.5">
-                ROCKET CRASH
+              <span className="text-base sm:text-lg font-black tracking-tight text-white font-display flex items-center gap-1">
+                GAME HUB
               </span>
             </div>
-            <div className="hidden xl:flex items-center gap-2 text-[11px] text-slate-400 border-l border-slate-800 pl-3">
-              <span className="flex items-center gap-1.5 text-emerald-400 font-mono font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                1,428 Đang Bay
-              </span>
-              <span className="text-slate-600">·</span>
-              <span className="font-mono text-slate-500">12ms</span>
+
+            {/* Game Switcher Tabs */}
+            <div className="flex items-center bg-slate-900 border border-slate-800 rounded-xl p-0.5 sm:p-1 shadow-inner">
+              <button
+                type="button"
+                onClick={() => setActiveGame('ROCKET')}
+                className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                  activeGame === 'ROCKET'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md shadow-emerald-500/25 scale-[1.02]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Chơi Rocket Crash (Tên Lửa)"
+              >
+                <span>🚀</span>
+                <span className="hidden xs:inline">Tên Lửa</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveGame('COM_CUT')}
+                className={`relative flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                  activeGame === 'COM_CUT'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md shadow-amber-500/25 scale-[1.02]'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+                title="Chơi Cơm Hay Cứt (Tài Xỉu Meme)"
+              >
+                <span>🍚💩</span>
+                <span>Cơm & Cứt</span>
+                <span className="hidden sm:inline-block text-[9px] bg-red-500 text-white px-1 py-0.2 rounded font-black animate-pulse">
+                  HOT
+                </span>
+              </button>
             </div>
           </div>
 
           <nav className="hidden lg:flex items-center gap-4 text-xs font-bold text-slate-300">
-            <button
-              onClick={() => setShowGarageModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-400 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>🚀</span>
-              <span>Kho Tên Lửa</span>
-            </button>
-            <button
-              onClick={() => setShowLeaderboardModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-400 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>🏆</span>
-              <span>Bảng Xếp Hạng</span>
-            </button>
-            <button
-              onClick={() => setShowDuelModal(true)}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-purple-500/50 hover:text-purple-300 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>⚔️</span>
-              <span>Solo 1v1</span>
-            </button>
+            {activeGame === 'ROCKET' && (
+              <>
+                <button
+                  onClick={() => setShowGarageModal(true)}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-400 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>🚀</span>
+                  <span>Kho Tên Lửa</span>
+                </button>
+                <button
+                  onClick={() => setShowLeaderboardModal(true)}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-400 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>🏆</span>
+                  <span>Bảng Xếp Hạng</span>
+                </button>
+                <button
+                  onClick={() => setShowDuelModal(true)}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-purple-500/50 hover:text-purple-300 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>⚔️</span>
+                  <span>Solo 1v1</span>
+                </button>
+              </>
+            )}
             <button
               onClick={() => setShowRulesModal(true)}
               className="hover:text-amber-400 transition-colors whitespace-nowrap px-1"
@@ -1674,7 +1730,36 @@ export default function App() {
 
         {/* Mobile Navigation Dropdown Menu */}
         {showMobileMenu && (
-          <div className="lg:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-2xl p-3 px-4 flex flex-col gap-2 animate-in slide-in-from-top-2 duration-150 shadow-2xl">
+          <div className="lg:hidden border-t border-slate-800 bg-slate-950/95 backdrop-blur-2xl p-3 px-4 flex flex-col gap-2.5 animate-in slide-in-from-top-2 duration-150 shadow-2xl">
+            {/* Mobile Game Switcher Banner */}
+            <div className="p-1 rounded-2xl bg-slate-900 border border-slate-800 grid grid-cols-2 gap-1">
+              <button
+                type="button"
+                onClick={() => { setActiveGame('ROCKET'); setShowMobileMenu(false); }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                  activeGame === 'ROCKET'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>🚀</span>
+                <span>Tên Lửa Crash</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setActiveGame('COM_CUT'); setShowMobileMenu(false); }}
+                className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                  activeGame === 'COM_CUT'
+                    ? 'bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 shadow-md font-black'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <span>🍚💩</span>
+                <span>Cơm & Cứt</span>
+                <span className="text-[9px] bg-red-500 text-white px-1 py-0.2 rounded font-black">HOT</span>
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-2 text-xs font-bold">
               <button
                 onClick={() => { setShowMobileMenu(false); setShowGarageModal(true); }}
@@ -1751,96 +1836,115 @@ export default function App() {
 
       {/* Main Container */}
       <main className="flex-1 max-w-[1440px] w-full mx-auto p-2 sm:p-4 lg:p-6 flex flex-col gap-3 sm:gap-4 overflow-x-hidden">
-        {/* Recent Rounds Multiplier Bar */}
-        <RecentRoundsBar history={history} onSelectRound={setSelectedAuditRound} />
+        {/* Recent Rounds Multiplier Bar (Rocket Crash only) */}
+        {activeGame === 'ROCKET' && (
+          <RecentRoundsBar history={history} onSelectRound={setSelectedAuditRound} />
+        )}
 
         {/* Core Game Arena Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-          {/* Left / Center 8 cols: Rocket Arena & Betting Controls */}
-          <div className="lg:col-span-8 flex flex-col gap-4">
-            {/* Live 1v1 Solo Duel Banner */}
-            {activeDuel && activeDuel.active && (
-              <DuelBanner
-                duel={activeDuel}
-                currentMultiplier={multiplier}
-                phase={phase}
-                userCashedOut={userCashedOut || userCashedOut2}
-                userCashoutMultiplier={userCashoutMultiplier || userCashoutMultiplier2}
-                onRematch={() => handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar)}
-                onClose={() => setActiveDuel(null)}
-              />
-            )}
-
-            {/* The Rocket Canvas */}
-            {(() => {
-              const hasBet1 = userBet > 0;
-              const hasBet2 = userBet2 > 0;
-              const hasAnyBet = hasBet1 || hasBet2;
-              const activeFlyingBet = (hasBet1 && !userCashedOut ? userBet : 0) + (hasBet2 && !userCashedOut2 ? userBet2 : 0);
-              const isPlayerFullyCashedOut = hasAnyBet && (!hasBet1 || userCashedOut) && (!hasBet2 || userCashedOut2);
-              const totalWonAmount =
-                (hasBet1 && userCashedOut ? Math.floor(userBet * (userCashoutMultiplier || 1.0)) : 0) +
-                (hasBet2 && userCashedOut2 ? Math.floor(userBet2 * (userCashoutMultiplier2 || 1.0)) : 0);
-              const displayCashoutMultiplier = userCashoutMultiplier || userCashoutMultiplier2 || undefined;
-
-              return (
-                <RocketCanvas
-                  phase={phase}
-                  multiplier={multiplier}
-                  countdown={countdown}
-                  userBet={activeFlyingBet > 0 ? activeFlyingBet : (userBet + userBet2)}
-                  userCashedOut={isPlayerFullyCashedOut}
-                  userCashoutMultiplier={displayCashoutMultiplier}
-                  cashedOutWonAmount={totalWonAmount}
-                  crashMultiplier={phase === 'CRASHED' ? crashPoint : undefined}
-                  activeEvent={activeEvent}
-                  onClaimEventReward={handleClaimEventReward}
-                  shieldSavedBet={shieldSavedBet}
-                  equippedSkinId={equippedSkin}
-                  jackpotPool={jackpotPool}
-                  onOpenGarage={() => setShowGarageModal(true)}
-                />
-              );
-            })()}
-
-            {/* Dual Betting Controls */}
-            <BettingControls
-              phase={phase}
+        {activeGame === 'COM_CUT' ? (
+          <div className="w-full flex flex-col gap-6">
+            <ComVaCutGame
               balance={balance}
-              currentMultiplier={multiplier}
-              userBet1={userBet}
-              userCashedOut1={userCashedOut}
-              userCashoutMultiplier1={userCashoutMultiplier}
-              autoCashoutEnabled1={autoCashoutEnabled}
-              autoCashoutTarget1={autoCashoutTarget}
-              onSetAutoCashoutEnabled1={setAutoCashoutEnabled}
-              onSetAutoCashoutTarget1={setAutoCashoutTarget}
-              onPlaceBet1={handlePlaceBet}
-              onCancelBet1={handleCancelBet}
-              onCashout1={handleCashoutClick}
-              userBet2={userBet2}
-              userCashedOut2={userCashedOut2}
-              userCashoutMultiplier2={userCashoutMultiplier2}
-              autoCashoutEnabled2={autoCashoutEnabled2}
-              autoCashoutTarget2={autoCashoutTarget2}
-              onSetAutoCashoutEnabled2={setAutoCashoutEnabled2}
-              onSetAutoCashoutTarget2={setAutoCashoutTarget2}
-              onPlaceBet2={handlePlaceBet2}
-              onCancelBet2={handleCancelBet2}
-              onCashout2={handleCashoutClick2}
+              onUpdateBalance={handleDirectBalanceUpdate}
               onAddFunds={handleAddFunds}
-              onOpenGarage={() => setShowGarageModal(true)}
-              onOpenDuel={() => setShowDuelModal(true)}
-              onOpenLeaderboard={handleOpenLeaderboards}
+              isMuted={isMuted}
+              messages={messages}
+              onSendMessage={handleSendMessage}
             />
+            {/* Community Chat under the landscape table */}
+            <div className="max-w-4xl mx-auto w-full">
+              <CommunityChat messages={messages} onSendMessage={handleSendMessage} />
+            </div>
           </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+            {/* Left / Center 8 cols: Game Arena & Controls */}
+            <div className="lg:col-span-8 flex flex-col gap-4">
+              {/* Live 1v1 Solo Duel Banner */}
+              {activeDuel && activeDuel.active && (
+                <DuelBanner
+                  duel={activeDuel}
+                  currentMultiplier={multiplier}
+                  phase={phase}
+                  userCashedOut={userCashedOut || userCashedOut2}
+                  userCashoutMultiplier={userCashoutMultiplier || userCashoutMultiplier2}
+                  onRematch={() => handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar)}
+                  onClose={() => setActiveDuel(null)}
+                />
+              )}
 
-          {/* Right 4 cols: Community Lobby & Chat */}
-          <div className="lg:col-span-4 flex flex-col gap-4">
-            <LiveBetsList players={players} currentMultiplier={multiplier} />
-            <CommunityChat messages={messages} onSendMessage={handleSendMessage} />
+              {/* The Rocket Canvas */}
+              {(() => {
+                const hasBet1 = userBet > 0;
+                const hasBet2 = userBet2 > 0;
+                const hasAnyBet = hasBet1 || hasBet2;
+                const activeFlyingBet = (hasBet1 && !userCashedOut ? userBet : 0) + (hasBet2 && !userCashedOut2 ? userBet2 : 0);
+                const isPlayerFullyCashedOut = hasAnyBet && (!hasBet1 || userCashedOut) && (!hasBet2 || userCashedOut2);
+                const totalWonAmount =
+                  (hasBet1 && userCashedOut ? Math.floor(userBet * (userCashoutMultiplier || 1.0)) : 0) +
+                  (hasBet2 && userCashedOut2 ? Math.floor(userBet2 * (userCashoutMultiplier2 || 1.0)) : 0);
+                const displayCashoutMultiplier = userCashoutMultiplier || userCashoutMultiplier2 || undefined;
+
+                return (
+                  <RocketCanvas
+                    phase={phase}
+                    multiplier={multiplier}
+                    countdown={countdown}
+                    userBet={activeFlyingBet > 0 ? activeFlyingBet : (userBet + userBet2)}
+                    userCashedOut={isPlayerFullyCashedOut}
+                    userCashoutMultiplier={displayCashoutMultiplier}
+                    cashedOutWonAmount={totalWonAmount}
+                    crashMultiplier={phase === 'CRASHED' ? crashPoint : undefined}
+                    activeEvent={activeEvent}
+                    onClaimEventReward={handleClaimEventReward}
+                    shieldSavedBet={shieldSavedBet}
+                    equippedSkinId={equippedSkin}
+                    jackpotPool={jackpotPool}
+                    onOpenGarage={() => setShowGarageModal(true)}
+                  />
+                );
+              })()}
+
+              {/* Dual Betting Controls */}
+              <BettingControls
+                phase={phase}
+                balance={balance}
+                currentMultiplier={multiplier}
+                userBet1={userBet}
+                userCashedOut1={userCashedOut}
+                userCashoutMultiplier1={userCashoutMultiplier}
+                autoCashoutEnabled1={autoCashoutEnabled}
+                autoCashoutTarget1={autoCashoutTarget}
+                onSetAutoCashoutEnabled1={setAutoCashoutEnabled}
+                onSetAutoCashoutTarget1={setAutoCashoutTarget}
+                onPlaceBet1={handlePlaceBet}
+                onCancelBet1={handleCancelBet}
+                onCashout1={handleCashoutClick}
+                userBet2={userBet2}
+                userCashedOut2={userCashedOut2}
+                userCashoutMultiplier2={userCashoutMultiplier2}
+                autoCashoutEnabled2={autoCashoutEnabled2}
+                autoCashoutTarget2={autoCashoutTarget2}
+                onSetAutoCashoutEnabled2={setAutoCashoutEnabled2}
+                onSetAutoCashoutTarget2={setAutoCashoutTarget2}
+                onPlaceBet2={handlePlaceBet2}
+                onCancelBet2={handleCancelBet2}
+                onCashout2={handleCashoutClick2}
+                onAddFunds={handleAddFunds}
+                onOpenGarage={() => setShowGarageModal(true)}
+                onOpenDuel={() => setShowDuelModal(true)}
+                onOpenLeaderboard={handleOpenLeaderboards}
+              />
+            </div>
+
+            {/* Right 4 cols: Community Lobby & Chat */}
+            <div className="lg:col-span-4 flex flex-col gap-4">
+              <LiveBetsList players={players} currentMultiplier={multiplier} />
+              <CommunityChat messages={messages} onSendMessage={handleSendMessage} />
+            </div>
           </div>
-        </div>
+        )}
       </main>
 
       {/* Modals */}
