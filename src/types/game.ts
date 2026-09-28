@@ -60,11 +60,15 @@ export interface ChatMessage {
 }
 
 export type FlightEventType = 
-  | 'WARP_NITRO'       // Tăng tốc phản lực siêu tốc x2
-  | 'ALIEN_SHIELD'     // UFO cấp khiên năng lượng bảo hiểm 100% cược nếu nổ
-  | 'COSMIC_AIRDROP'   // Rương tiếp tế vũ trụ bay lơ lửng, bấm nhận Xu
-  | 'ENGINE_OVERHEAT'  // Cảnh báo quá nhiệt động cơ thót tim
-  | 'LUCKY_ENVELOPE';  // Lì xì đại gia rơi lấp lánh
+  | 'WARP_NITRO'            // Tăng tốc phản lực siêu tốc x2
+  | 'ALIEN_SHIELD'          // UFO cấp khiên năng lượng bảo hiểm 100% cược nếu nổ
+  | 'COSMIC_AIRDROP'        // Rương tiếp tế vũ trụ bay lơ lửng, bấm nhận Xu
+  | 'ENGINE_OVERHEAT'       // Cảnh báo quá nhiệt động cơ thót tim
+  | 'LUCKY_ENVELOPE'        // Lì xì đại gia rơi lấp lánh
+  | 'BLACK_HOLE_GRAVITY'    // Lỗ Đen Vũ Trụ: Hút trọng lực & x3 siêu tốc sau thoát hiểm
+  | 'COSMIC_JACKPOT_RAIN'   // Mưa Sao Sa Jackpot: Rơi ngôi sao may mắn nhận Xu
+  | 'VIP_DIAMOND_CHEST'     // Rương Kim Cương Hoàng Gia: Thưởng Khủng 5K - 15K Xu
+  | 'SOLAR_FLARE_BOOST';    // Bão Mặt Trời Bức Phá: Quang phổ bão lửa tăng tốc phi mã
 
 export interface ActiveFlightEvent {
   id: string;

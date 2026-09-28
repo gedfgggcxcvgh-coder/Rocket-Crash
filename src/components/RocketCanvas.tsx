@@ -326,6 +326,14 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
           drawCosmicCrate(ctx, w, h);
         } else if (activeEvent.type === 'LUCKY_ENVELOPE') {
           drawLuckyEnvelope(ctx, w, h);
+        } else if (activeEvent.type === 'BLACK_HOLE_GRAVITY') {
+          drawBlackHole(ctx, w, h);
+        } else if (activeEvent.type === 'VIP_DIAMOND_CHEST') {
+          drawDiamondChest(ctx, w, h);
+        } else if (activeEvent.type === 'COSMIC_JACKPOT_RAIN') {
+          drawShootingStars(ctx, w, h);
+        } else if (activeEvent.type === 'SOLAR_FLARE_BOOST') {
+          drawSolarFlare(ctx, w, h);
         }
       }
 
@@ -1121,6 +1129,131 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
     ctx.restore();
   }
 
+  // Draw Swirling Black Hole Void
+  function drawBlackHole(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save();
+    const bx = w * 0.65;
+    const by = h * 0.32;
+    const t = Date.now() * 0.003;
+
+    const grad = ctx.createRadialGradient(bx, by, 10, bx, by, 75);
+    grad.addColorStop(0, '#000000');
+    grad.addColorStop(0.3, 'rgba(168, 85, 247, 0.8)');
+    grad.addColorStop(0.7, 'rgba(6, 182, 212, 0.4)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(bx, by, 75, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.shadowColor = '#C084FC';
+    ctx.shadowBlur = 20;
+    ctx.beginPath();
+    ctx.arc(bx, by, 22, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = '#22D3EE';
+    ctx.lineWidth = 1.8;
+    for (let i = 0; i < 3; i++) {
+      const angle = t + (i * Math.PI * 2) / 3;
+      ctx.beginPath();
+      ctx.arc(bx, by, 38 + Math.sin(t * 2 + i) * 6, angle, angle + Math.PI * 0.8);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Draw Royal Diamond Chest
+  function drawDiamondChest(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    if (activeEvent?.rewardClaimed) return;
+    ctx.save();
+    const t = Date.now() * 0.002;
+    const cx = w * 0.52 + Math.sin(t) * (w * 0.12);
+    const cy = h * 0.28 + Math.cos(t * 1.3) * (h * 0.06);
+
+    ctx.strokeStyle = 'rgba(103, 232, 249, 0.35)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const angle = t * 0.5 + (i * Math.PI) / 4;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(angle) * 45, cy + Math.sin(angle) * 45);
+      ctx.stroke();
+    }
+
+    const chestGrad = ctx.createLinearGradient(cx - 16, cy - 12, cx + 16, cy + 12);
+    chestGrad.addColorStop(0, '#0284C7');
+    chestGrad.addColorStop(0.5, '#38BDF8');
+    chestGrad.addColorStop(1, '#0369A1');
+
+    ctx.fillStyle = chestGrad;
+    ctx.shadowColor = '#38BDF8';
+    ctx.shadowBlur = 22;
+    ctx.fillRect(cx - 16, cy - 12, 32, 26);
+
+    ctx.fillStyle = '#F59E0B';
+    ctx.fillRect(cx - 16, cy - 3, 32, 6);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 6);
+    ctx.lineTo(cx + 6, cy);
+    ctx.lineTo(cx, cy + 6);
+    ctx.lineTo(cx - 6, cy);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // Draw Shooting Stars Rain
+  function drawShootingStars(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save();
+    const t = Date.now() * 0.003;
+    ctx.strokeStyle = '#FCD34D';
+    ctx.lineWidth = 2;
+    ctx.shadowColor = '#F59E0B';
+    ctx.shadowBlur = 12;
+
+    for (let i = 0; i < 6; i++) {
+      const progress = ((t * 0.8 + i * 0.18) % 1.0);
+      const sx = w * 0.85 - progress * (w * 0.8);
+      const sy = h * 0.1 + progress * (h * 0.7);
+
+      ctx.globalAlpha = Math.sin(progress * Math.PI);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(sx + 30, sy - 20);
+      ctx.stroke();
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // Draw Solar Flare Wave
+  function drawSolarFlare(ctx: CanvasRenderingContext2D, w: number, h: number) {
+    ctx.save();
+    const sx = w * 0.85;
+    const sy = h * 0.15;
+    const pulse = 1 + 0.1 * Math.sin(Date.now() * 0.01);
+
+    const grad = ctx.createRadialGradient(sx, sy, 20, sx, sy, 160 * pulse);
+    grad.addColorStop(0, 'rgba(254, 240, 138, 0.45)');
+    grad.addColorStop(0.4, 'rgba(245, 158, 11, 0.25)');
+    grad.addColorStop(0.8, 'rgba(239, 68, 68, 0.12)');
+    grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
+
   // Dynamic multiplier color class
   const getMultiplierColor = (val: number) => {
     if (phase === 'CRASHED') return 'text-red-500 drop-shadow-[0_0_25px_rgba(239,68,68,0.85)]';
@@ -1165,20 +1298,32 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
             {/* Surprise Flight Event Banner */}
             {activeEvent && (
               <div className="mb-3 animate-in slide-in-from-top-3 duration-200">
-                {activeEvent.type === 'COSMIC_AIRDROP' || activeEvent.type === 'LUCKY_ENVELOPE' ? (
+                {activeEvent.type === 'COSMIC_AIRDROP' ||
+                activeEvent.type === 'LUCKY_ENVELOPE' ||
+                activeEvent.type === 'COSMIC_JACKPOT_RAIN' ||
+                activeEvent.type === 'VIP_DIAMOND_CHEST' ? (
                   !activeEvent.rewardClaimed ? (
                     <button
                       type="button"
                       onClick={() => onClaimEventReward?.(activeEvent)}
                       className={`px-4 py-2 rounded-xl font-black text-xs md:text-sm flex items-center gap-2 shadow-2xl transition-all hover:scale-105 active:scale-95 cursor-pointer border-2 animate-bounce ${
-                        activeEvent.type === 'COSMIC_AIRDROP'
+                        activeEvent.type === 'VIP_DIAMOND_CHEST'
+                          ? 'bg-gradient-to-r from-cyan-500 via-sky-400 to-blue-600 text-white border-cyan-200 shadow-cyan-500/50'
+                          : activeEvent.type === 'COSMIC_JACKPOT_RAIN'
                           ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-slate-950 border-yellow-100 shadow-amber-500/50'
+                          : activeEvent.type === 'COSMIC_AIRDROP'
+                          ? 'bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 text-white border-emerald-200 shadow-emerald-500/50'
                           : 'bg-gradient-to-r from-red-600 via-rose-500 to-amber-500 text-white border-yellow-300 shadow-red-500/50'
                       }`}
                     >
-                      <span className="text-base">{activeEvent.type === 'COSMIC_AIRDROP' ? '🎁' : '🧧'}</span>
+                      <span className="text-base">
+                        {activeEvent.type === 'VIP_DIAMOND_CHEST' && '💎'}
+                        {activeEvent.type === 'COSMIC_JACKPOT_RAIN' && '⭐'}
+                        {activeEvent.type === 'COSMIC_AIRDROP' && '🎁'}
+                        {activeEvent.type === 'LUCKY_ENVELOPE' && '🧧'}
+                      </span>
                       <span>{activeEvent.title} (+{activeEvent.rewardAmount?.toLocaleString('vi-VN')} Xu)</span>
-                      <span className="bg-slate-950/25 px-2 py-0.5 rounded text-[11px] font-black underline tracking-wide">
+                      <span className="bg-slate-950/30 px-2 py-0.5 rounded text-[11px] font-black underline tracking-wide">
                         BẤM NHẬN!
                       </span>
                     </button>
@@ -1194,6 +1339,10 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
                         ? 'bg-purple-950/90 text-purple-300 border-purple-400 shadow-purple-500/40 ring-1 ring-purple-400/50'
                         : activeEvent.type === 'ALIEN_SHIELD'
                         ? 'bg-cyan-950/90 text-cyan-300 border-cyan-400 shadow-cyan-500/40 ring-1 ring-cyan-400/50'
+                        : activeEvent.type === 'BLACK_HOLE_GRAVITY'
+                        ? 'bg-slate-950/90 text-purple-300 border-purple-500 shadow-purple-500/50 ring-2 ring-purple-500/60'
+                        : activeEvent.type === 'SOLAR_FLARE_BOOST'
+                        ? 'bg-amber-950/90 text-amber-300 border-amber-400 shadow-amber-500/50 ring-1 ring-amber-400/50'
                         : 'bg-red-950/90 text-red-300 border-red-500 shadow-red-500/50 ring-2 ring-red-500/60'
                     }`}
                   >
@@ -1201,6 +1350,8 @@ export const RocketCanvas: React.FC<RocketCanvasProps> = ({
                       {activeEvent.type === 'WARP_NITRO' && '⚡'}
                       {activeEvent.type === 'ALIEN_SHIELD' && '🛡️'}
                       {activeEvent.type === 'ENGINE_OVERHEAT' && '⚠️'}
+                      {activeEvent.type === 'BLACK_HOLE_GRAVITY' && '🕳️'}
+                      {activeEvent.type === 'SOLAR_FLARE_BOOST' && '☀️'}
                     </span>
                     <span>{activeEvent.title}</span>
                   </div>

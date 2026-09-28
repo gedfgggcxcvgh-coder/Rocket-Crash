@@ -424,12 +424,22 @@ export default function App() {
             if (prevPhaseRef.current !== data.status) {
               if (data.status === 'FLYING') {
                 sounds.startEngine();
-                // Schedule surprise flight event if crash point > 1.8
-                if (data.crashPoint > 1.8 && Math.random() < 0.75) {
-                  const types: FlightEventType[] = ['WARP_NITRO', 'ALIEN_SHIELD', 'COSMIC_AIRDROP', 'ENGINE_OVERHEAT', 'LUCKY_ENVELOPE'];
+                // Schedule surprise flight event if crash point > 1.5
+                if (data.crashPoint > 1.5 && Math.random() < 0.85) {
+                  const types: FlightEventType[] = [
+                    'WARP_NITRO',
+                    'ALIEN_SHIELD',
+                    'COSMIC_AIRDROP',
+                    'ENGINE_OVERHEAT',
+                    'LUCKY_ENVELOPE',
+                    'BLACK_HOLE_GRAVITY',
+                    'COSMIC_JACKPOT_RAIN',
+                    'VIP_DIAMOND_CHEST',
+                    'SOLAR_FLARE_BOOST',
+                  ];
                   const selectedType = types[Math.floor(Math.random() * types.length)];
-                  const minTrig = 1.30;
-                  const maxTrig = Math.min(data.crashPoint - 0.2, 8.0);
+                  const minTrig = 1.25;
+                  const maxTrig = Math.min(data.crashPoint - 0.15, 12.0);
                   if (maxTrig > minTrig) {
                     const triggerMult = parseFloat((Math.random() * (maxTrig - minTrig) + minTrig).toFixed(2));
                     plannedEventRef.current = { triggered: false, triggerMult, type: selectedType };
@@ -610,6 +620,76 @@ export default function App() {
             user: 'AnhBa_BaoSàn',
             avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=AnhBa',
             text: '🧧 Tao vừa húp đậm, ném bao lì xì phát lộc cho anh em lụm nhanh tay nhé! 💸💸',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        break;
+
+      case 'BLACK_HOLE_GRAVITY':
+        title = 'BÃO LỖ ĐEN VŨ TRỤ: LỰC HÚT SIÊU TRỌNG LỰC!';
+        description = 'Tên lửa vào vùng xoáy lỗ đen, tích năng lượng để bứt phá x3!';
+        durationMs = 5000;
+        sounds.playWarpSpeed();
+        setMessages(prev => [
+          ...prev.slice(-30),
+          {
+            id: `blackhole_${Date.now()}`,
+            user: 'Sơn_LỗĐen',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Son',
+            text: '🕳️ BÃO LỖ ĐEN XUẤT HIỆN KÌA!! Nó đang hút năng lượng chuẩn bị phi nước đại x3 anh em ơiii 🌌⚡',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        break;
+
+      case 'COSMIC_JACKPOT_RAIN':
+        rewardAmount = Math.floor(Math.random() * 3000) + 1500; // 1.500 - 4.500 Xu
+        title = 'MƯA SAO SA JACKPOT';
+        description = 'Bão sao sa giội xuống hạm đội, nhặt ngay ngôi sao may mắn!';
+        durationMs = 6500;
+        sounds.playClaimReward();
+        setMessages(prev => [
+          ...prev.slice(-30),
+          {
+            id: `star_rain_${Date.now()}`,
+            user: 'Minh_ThầnTài',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Minh',
+            text: '🌠 MƯA SAO SA JACKPOT RƠI CỰC MẠNH! Bấm vào các ngôi sao rơi để húp Xu nhanh tayyy ⭐✨',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        break;
+
+      case 'VIP_DIAMOND_CHEST':
+        rewardAmount = Math.floor(Math.random() * 10000) + 5000; // 5.000 - 15.000 Xu
+        title = 'RƯƠNG KIM CƯƠNG HOÀNG GIA';
+        description = 'Rương Kim Cương cực hiếm rơi từ Hạm Đội Thần Thoại! Nhận Xu khủng!';
+        durationMs = 7000;
+        sounds.playClaimReward();
+        setMessages(prev => [
+          ...prev.slice(-30),
+          {
+            id: `diamond_chest_${Date.now()}`,
+            user: 'ĐạiGia_HoàngGia',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=DaiGia',
+            text: '💎 RƯƠNG KIM CƯƠNG HOÀNG GIA SIÊU HIẾM ĐÃ XUẤT HIỆN!! Bấm húp 15K Xu lẹ lên nào 👑💸',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          },
+        ]);
+        break;
+
+      case 'SOLAR_FLARE_BOOST':
+        title = 'BÃƠ MẶT TRỜI: QUANG PHỔ x5!';
+        description = 'Sóng nhiệt Bão Mặt Trời kích phát gia tốc cực đại!';
+        durationMs = 3500;
+        sounds.playWarpSpeed();
+        setMessages(prev => [
+          ...prev.slice(-30),
+          {
+            id: `solar_flare_${Date.now()}`,
+            user: 'Long_NhiệtHuyết',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Long',
+            text: '☀️ BÃƠ MẶT TRỜI BỨC PHÁ QUANG PHỔ!! Tên lửa rực lửa phi như pháo hoa x5 tốc độ 🔥🔥',
             time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           },
         ]);
