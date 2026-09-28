@@ -158,8 +158,9 @@ async function startServer() {
   function generateServerBots(): PlayerBetServer[] {
     const count = Math.floor(Math.random() * 6) + 6;
     const shuffled = [...BOT_NAMES].sort(() => 0.5 - Math.random()).slice(0, count);
-    const amounts = [1000, 2500, 5000, 10000, 20000, 35000, 50000, 100000];
-    return shuffled.map((name, idx) => {
+    const amounts = [100000, 250000, 500000, 1000000, 2000000, 3500000, 5000000, 10000000];
+    
+    const bots = shuffled.map((name, idx) => {
       const betAmount = amounts[Math.floor(Math.random() * amounts.length)];
       const roll = Math.random();
       let target: number;
@@ -174,10 +175,32 @@ async function startServer() {
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${name}`,
         betAmount,
         targetMultiplier: target,
-        status: 'PENDING',
+        status: 'PENDING' as const,
         isBot: true,
       };
     });
+
+    // Random bot chat comment when placing bets
+    if (Math.random() < 0.45 && bots.length > 0) {
+      const talker = bots[Math.floor(Math.random() * bots.length)];
+      const betFormatted = talker.betAmount.toLocaleString('vi-VN');
+      const betComments = [
+        `Đù má ván này tao vẩy ${betFormatted} Xu khô máu, đéo x5 đéo làm người! 🔥`,
+        `Vừa ném ${betFormatted} Xu vào, anh em né ra cho đại gia thể hiện! 😎`,
+        `Cay vcl ván trước ăn lộn, ván này phang ${betFormatted} Xu gỡ gạc!`,
+        `Nhẹ nhàng ${betFormatted} Xu xem nhà cái quay hũ kiểu gì, định bịp tao à! 😈`,
+        `Tất tay ${betFormatted} Xu! Một là ăn tết to hai là ra đê ở! 🚀`,
+        `Ván này tao nhắm đến x10, anh em nào dám gồng theo không?`,
+      ];
+      addServerChatMessage({
+        user: talker.username,
+        avatar: talker.avatar,
+        text: betComments[Math.floor(Math.random() * betComments.length)],
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+    }
+
+    return bots;
   }
 
   globalGameState.players = generateServerBots();
@@ -254,14 +277,36 @@ async function startServer() {
         });
 
         // Add crash comment from bot
-        const crashMultStr = globalGameState.crashPoint.toFixed(2);
+        const crashMultVal = globalGameState.crashPoint;
+        const crashMultStr = crashMultVal.toFixed(2);
         const randBot = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-        const crashSlangs = [
-          `Vcl nổ ở ${crashMultStr}x, bay cụ nó tiền cược rồi! 😭`,
-          `Nổ sớm thế nhở ${crashMultStr}x, cay vãi nồi!`,
-          `Hahaha may mà chốt sớm, nhường các bố gồng tiếp!`,
-          `BÙM ở ${crashMultStr}x!! Bị nuốt sạch cắc nào rồi!`,
-        ];
+        
+        let crashSlangs: string[] = [];
+        if (crashMultVal < 1.35) {
+          crashSlangs = [
+            `ĐÙ MÁ NỔ ${crashMultStr}x??? NHÀ CÁI BỊP VCL KHÚC NÀY!! 🤬`,
+            `Chưa kịp chớp mắt đã BÙM ở ${crashMultStr}x, cay vãi cặt!! 😭`,
+            `Má nó nuốt sạch tiền cược trong 1 giây, ảo thật đấy!! 💀`,
+            `Game bịp đéo chịu được, vừa bấm cược xong nổ luôn!! 💩`,
+            `Nhà cái nuốt dày thế, giả lại tiền cược cho taooo! 🚨`,
+          ];
+        } else if (crashMultVal < 3.50) {
+          crashSlangs = [
+            `Vcl nổ ở ${crashMultStr}x, gồng thêm 0.2 nữa là húp cmnr cay vãi nồi!`,
+            `Biết thế chốt mẹ 2x cho lành, tham thì thâm vcl... 😮‍💨`,
+            `Nổ ngay trước mũi x3, cay đéo tả nổi các ông ạ!`,
+            `Lại cút mất tiền cược, ván sau xé xác nhà cái ra gỡ! 🔥`,
+            `Má ơi nổ ${crashMultStr}x vừa kịp cút, cay đắng thật!`,
+          ];
+        } else {
+          crashSlangs = [
+            `ĐÙ MÁ X${crashMultStr} KÌA CÓ AI GỒNG TỚI ĐÂY KHÔNG??? OÁCH VCL! 🚀✨`,
+            `Aiii chốt được ${crashMultStr}x giơ tay tao lạy phát!! Bay tít mù cmnl! 👑`,
+            `Vãi lờ x${crashMultStr}!! Tiếc vcl vừa nhảy x2 cmnr 😱`,
+            `Ăn đậm x${crashMultStr} rồi!! Chuyến này đổi đời cmnl anh em ơi! 💰💰`,
+          ];
+        }
+
         addServerChatMessage({
           user: randBot,
           avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${randBot}`,
@@ -287,13 +332,22 @@ async function startServer() {
             p.status = 'CASHED_OUT';
             p.cashoutMultiplier = p.targetMultiplier;
 
-            // Optional bot flex in chat
-            if (p.isBot && Math.random() < 0.15) {
+            // Bot flex in chat when cashing out
+            if (p.isBot && Math.random() < 0.28) {
               const win = Math.floor(p.betAmount * p.targetMultiplier);
+              const winStr = win.toLocaleString('vi-VN');
+              const multStr = p.targetMultiplier.toFixed(2);
+              const flexSlangs = [
+                `Húp ngọt +${winStr} Xu ở ${multStr}x!! Tuổi lờ ăn được tao haha 😏`,
+                `Chốt ${multStr}x húp tạm +${winStr} Xu làm cốc bia, cãi nhau với nhà cái làm đéo gì 🍺`,
+                `Vẩy nhẹ ${multStr}x bú +${winStr} Xu, gồng làm đéo gì cho đau tim anh em ơi! 🔥`,
+                `Húp +${winStr} Xu ấm cật vcl!! Đủ tiền bao người yêu đi nghỉ dưỡng weekend! 🏖️`,
+                `Đại gia chốt ${multStr}x húp +${winStr} Xu! Anh em ở lại gồng vui vẻ nhé 👋`,
+              ];
               addServerChatMessage({
                 user: p.username,
                 avatar: p.avatar,
-                text: `Húp +${win.toLocaleString('vi-VN')} Xu ở ${p.targetMultiplier.toFixed(2)}x, ấm cật rồi ae! 🤑`,
+                text: flexSlangs[Math.floor(Math.random() * flexSlangs.length)],
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               });
             }
