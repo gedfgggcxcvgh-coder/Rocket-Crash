@@ -400,7 +400,6 @@ export default function App() {
                 const finalMult = me.cashoutMultiplier || me.targetMultiplier || 1.0;
                 setUserCashoutMultiplier(finalMult);
                 const winAmount = Math.floor(me.betAmount * finalMult);
-                setBalance(prev => prev + winAmount);
                 const netProfit = winAmount - me.betAmount;
                 setStats(prev => ({
                   ...prev,
@@ -633,7 +632,7 @@ export default function App() {
     sounds.playClick();
     setUserBet(amount);
 
-    const userId = discordUser?.id || 'guest_user';
+    const userId = currentUserId;
     const username = discordUser ? (discordUser.globalName || discordUser.username) : 'Khách';
     const avatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest';
 
@@ -684,7 +683,7 @@ export default function App() {
   const handleCashoutClick = async () => {
     if (userCashedOut || phase !== 'FLYING') return;
 
-    const userId = discordUser?.id || 'guest_user';
+    const userId = currentUserId;
 
     try {
       const res = await fetch('/api/game/cashout', {
