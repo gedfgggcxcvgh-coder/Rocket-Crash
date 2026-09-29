@@ -703,8 +703,8 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     };
   }, [isDraggingLid, handleTouchOrMouseMove, handleTouchOrMouseUp]);
 
-  // Place bet action - Deduct balance immediately
-  const handlePlaceBet = (side: ComCutBetType) => {
+  // Place bet action - Deduct balance immediately & sync with server
+  const handlePlaceBet = async (side: ComCutBetType) => {
     if (isBetLocked) {
       sounds.playErrorBeep();
       setScoreNotification({
@@ -745,6 +745,28 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       positive: false,
     });
     setTimeout(() => setScoreNotification(null), 1500);
+
+    // Call server endpoint so balance deduction is persisted on server & synced via SSE
+    if (currentUserId) {
+      try {
+        const res = await fetch('/api/comcut/bet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: currentUserId,
+            side,
+            amount: selectedChip,
+            roundNumber,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok && typeof data.balance === 'number') {
+          onUpdateBalance(data.balance);
+        }
+      } catch (err) {
+        console.error('Failed to sync comcut bet with server:', err);
+      }
+    }
   };
 
   const handleDoubleBet = () => {
@@ -767,7 +789,24 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     onComCutBet?.(currentTotal);
     const doubled = { ...userBets };
     (Object.keys(doubled) as ComCutBetType[]).forEach((k) => {
-      doubled[k] = doubled[k] * 2;
+      const addAmt = doubled[k];
+      if (addAmt > 0) {
+        doubled[k] = doubled[k] * 2;
+        if (currentUserId) {
+          fetch('/api/comcut/bet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUserId,
+              side: k,
+              amount: addAmt,
+              roundNumber,
+            }),
+          }).then(res => (res.ok ? res.json() : null)).then(data => {
+            if (data && typeof data.balance === 'number') onUpdateBalance(data.balance);
+          }).catch(() => {});
+        }
+      }
     });
     setUserBets(doubled);
     syncUserBetsAcrossTabs(doubled, nextBal);
@@ -796,6 +835,26 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     setUserBets(reBets);
     syncUserBetsAcrossTabs(reBets, nextBal);
     sounds.playChipClink();
+
+    if (currentUserId) {
+      (Object.keys(lastRoundBets) as ComCutBetType[]).forEach((k) => {
+        const amt = lastRoundBets[k];
+        if (amt > 0) {
+          fetch('/api/comcut/bet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: currentUserId,
+              side: k,
+              amount: amt,
+              roundNumber,
+            }),
+          }).then(res => (res.ok ? res.json() : null)).then(data => {
+            if (data && typeof data.balance === 'number') onUpdateBalance(data.balance);
+          }).catch(() => {});
+        }
+      });
+    }
   };
 
   const clearBets = () => {
