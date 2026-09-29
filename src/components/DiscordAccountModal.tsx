@@ -44,6 +44,7 @@ export const DiscordAccountModal: React.FC<DiscordAccountModalProps> = ({
   const [clientSecretInput, setClientSecretInput] = useState(() => localStorage.getItem('discord_client_secret') || '');
   const [showConfigBox, setShowConfigBox] = useState(false);
   const [copiedRedirectUri, setCopiedRedirectUri] = useState(false);
+  const [copiedSyncKey, setCopiedSyncKey] = useState(false);
 
   // Save OAuth credentials to backend and local storage
   const handleSaveOAuthCredentials = async () => {

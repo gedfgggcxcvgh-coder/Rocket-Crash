@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { GamePhase, FlightMode, PlayerBet, RoundHistory, UserStats, ChatMessage, ActiveFlightEvent, FlightEventType } from './types/game';
+import { GamePhase, FlightMode, PlayerBet, RoundHistory, UserStats, ChatMessage, ActiveFlightEvent, FlightEventType, ComCutGameState } from './types/game';
 import { DiscordUser } from './types/discord';
 import { sounds } from './utils/audio';
 import { generateSeed, sha256, calculateMultiplier, getAltitudeStage } from './utils/provablyFair';
@@ -83,10 +83,10 @@ const getStoredSkins = (userId: string): UserSkinPrefs => {
   const userPref = prefs[userId] || prefs['global_fallback'];
   
   if (userPref) {
-    const unlocked = Array.isArray(userPref.unlocked) && userPref.unlocked.length > 0
-      ? Array.from(new Set(['STANDARD', ...userPref.unlocked])) as RocketSkinId[]
-      : ['STANDARD'];
-    const equipped = (userPref.equipped && unlocked.includes(userPref.equipped))
+    const unlocked: RocketSkinId[] = Array.isArray(userPref.unlocked) && userPref.unlocked.length > 0
+      ? (Array.from(new Set(['STANDARD', ...userPref.unlocked])) as RocketSkinId[])
+      : (['STANDARD'] as RocketSkinId[]);
+    const equipped: RocketSkinId = (userPref.equipped && unlocked.includes(userPref.equipped))
       ? userPref.equipped
       : 'STANDARD';
     return { equipped, unlocked };
@@ -145,7 +145,13 @@ export default function App() {
   const [autoCashoutTarget, setAutoCashoutTarget] = useState<number>(2.0);
 
   // Game Hub active game ('ROCKET' | 'COM_CUT')
-  const [activeGame, setActiveGame] = useState<'ROCKET' | 'COM_CUT'>('ROCKET');
+  const [activeGame, setActiveGame] = useState<'ROCKET' | 'COM_CUT'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('rocket_crash_active_game');
+      if (saved === 'COM_CUT' || saved === 'ROCKET') return saved;
+    }
+    return 'ROCKET';
+  });
 
   // Dual Bet 2 (Gồng Đỉnh)
   const [userBet2, setUserBet2] = useState<number>(0);
@@ -170,6 +176,7 @@ export default function App() {
   const [jackpotPool, setJackpotPool] = useState<number>(18500000);
   const [activeDuel, setActiveDuel] = useState<DuelState | null>(null);
   const [leaderboardItems, setLeaderboardItems] = useState<LeaderboardItem[]>([]);
+  const [comCutServerState, setComCutServerState] = useState<ComCutGameState | null>(null);
 
   // History & Community
   const [history, setHistory] = useState<RoundHistory[]>([]);
@@ -284,9 +291,15 @@ export default function App() {
         if (newUser) {
           setDiscordUser(newUser);
           setBalance(newUser.balance);
-          if (newUser.stats) {
-            setStats(prev => ({ ...prev, ...newUser.stats }));
+          if ((newUser as any).stats) {
+            setStats(prev => ({ ...prev, ...(newUser as any).stats }));
           }
+        }
+      }
+      if (e.key === 'rocket_crash_active_game') {
+        const nextGame = e.newValue as 'ROCKET' | 'COM_CUT';
+        if (nextGame === 'ROCKET' || nextGame === 'COM_CUT') {
+          setActiveGame(nextGame);
         }
       }
       if (e.key === SKIN_PREFS_KEY) {
@@ -541,6 +554,14 @@ export default function App() {
 
             if (data.userBalances && typeof data.userBalances[currentUserId] === 'number') {
               setBalance(data.userBalances[currentUserId]);
+            }
+
+            if (data.comCut) {
+              const myBets = (data.comCutUserBets && currentUserId && data.comCutUserBets[currentUserId]) || undefined;
+              setComCutServerState({
+                ...data.comCut,
+                userBets: myBets,
+              });
             }
 
             if (Array.isArray(data.players)) {
@@ -1039,7 +1060,7 @@ export default function App() {
           id: `bot_duel_${Date.now()}`,
           user: activeDuel.opponentName,
           avatar: activeDuel.opponentAvatar,
-          text: `🤖 Đã chốt cược Solo tại ${activeDuel.opponentTargetMult.toFixed(2)}x! Bạn có dám gồng cao hơn không? 🔥`,
+          text: `🤖 Đã chốt cược Solo tại ${(activeDuel.opponentTargetMult ?? 2.0).toFixed(2)}x! Bạn có dám gồng cao hơn không? 🔥`,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           badge: 'SOLO 1V1',
           isSystem: true,
@@ -1860,7 +1881,12 @@ export default function App() {
               messages={messages}
               onSendMessage={handleSendMessage}
               onOpenGameHub={() => setShowGameHubModal(true)}
-              onSwitchGame={(selectedGame) => setActiveGame(selectedGame)}
+              onSwitchGame={(selectedGame) => {
+                setActiveGame(selectedGame);
+                localStorage.setItem('rocket_crash_active_game', selectedGame);
+              }}
+              serverGameState={comCutServerState}
+              currentUserId={currentUserId}
             />
             {/* Community Chat under the landscape table */}
             <div className="max-w-4xl mx-auto w-full">

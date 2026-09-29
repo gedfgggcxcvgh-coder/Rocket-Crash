@@ -1,30 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock, Menu } from 'lucide-react';
+import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock, Menu, Wifi } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sounds } from '../utils/audio';
 import { Real3DDice } from './Real3DDice';
-import { ChatMessage } from '../types/game';
+import { ChatMessage, ComCutGameState, ComCutPhase, ComCutBetType, ComCutHistoryItem, ComCutBotBet } from '../types/game';
 import { GameHubModal } from './GameHubModal';
 
-export type ComCutBetType = 'COM' | 'CUT' | 'BAO_COM' | 'BAO_CUT' | 'COM_GA' | 'CUT_RUOI';
-
-export interface ComCutHistoryItem {
-  id: string;
-  roundNumber: number;
-  dices: [number, number, number];
-  total: number;
-  result: 'COM' | 'CUT';
-  isBao: boolean;
-  time: string;
-}
-
-interface BotBet {
-  id: string;
-  name: string;
-  avatar: string;
-  side: 'COM' | 'CUT';
-  amount: number;
-}
+export type { ComCutBetType, ComCutHistoryItem, ComCutBotBet };
 
 interface ComVaCutGameProps {
   balance: number;
@@ -35,7 +17,13 @@ interface ComVaCutGameProps {
   onSendMessage?: (text: string) => void;
   onOpenGameHub?: () => void;
   onSwitchGame?: (game: 'ROCKET' | 'COM_CUT') => void;
+  serverGameState?: ComCutGameState | null;
+  currentUserId?: string;
 }
+
+const comCutSyncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
+  ? new BroadcastChannel('comcut_cross_tab_sync')
+  : null;
 
 const CHIP_DENOMINATIONS = [
   { value: 10000, label: '10K', color: 'bg-emerald-600 border-emerald-400 text-white', ring: 'ring-emerald-400' },
@@ -63,6 +51,8 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   onSendMessage,
   onOpenGameHub,
   onSwitchGame,
+  serverGameState,
+  currentUserId,
 }) => {
   // Game Hub Switcher Modal State
   const [showGameHub, setShowGameHub] = useState<boolean>(false);
@@ -118,8 +108,34 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }, 50);
   };
 
-  // Phases: 'BETTING' (25s: 20s cược + 5s KHÓA CƯỢC) -> 'SHAKING' (3s) -> 'OPENING' (8s nặn bát) -> 'RESULT' (4s)
-  const [phase, setPhase] = useState<'BETTING' | 'SHAKING' | 'OPENING' | 'RESULT'>('BETTING');
+  // Local fallback server state if parent didn't provide via SSE
+  const [localServerState, setLocalServerState] = useState<ComCutGameState | null>(null);
+
+  useEffect(() => {
+    if (serverGameState) return;
+    let isMounted = true;
+    const fetchState = () => {
+      fetch('/api/comcut/state')
+        .then(res => (res.ok ? res.json() : null))
+        .then(data => {
+          if (data && isMounted) {
+            setLocalServerState(data);
+          }
+        })
+        .catch(() => {});
+    };
+    fetchState();
+    const interval = setInterval(fetchState, 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, [serverGameState]);
+
+  const effectiveServerState = serverGameState || localServerState;
+
+  // Synchronized Phases: 'BETTING' (25s: 20s cược + 5s KHÓA CƯỢC) -> 'SHAKING' (3s) -> 'OPENING' (8s nặn bát) -> 'RESULT' (4s)
+  const [phase, setPhase] = useState<ComCutPhase>('BETTING');
   const [timeLeft, setTimeLeft] = useState<number>(25);
   // Khóa cược khi không ở phiên cược HOẶC khi bước vào 5 giây cuối của phiên cược
   const isBetLocked = phase !== 'BETTING' || timeLeft <= 5;
@@ -129,14 +145,22 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   });
 
   // User bets this round
-  const [userBets, setUserBets] = useState<Record<ComCutBetType, number>>({
-    COM: 0,
-    CUT: 0,
-    BAO_COM: 0,
-    BAO_CUT: 0,
-    COM_GA: 0,
-    CUT_RUOI: 0,
+  const [userBets, setUserBets] = useState<Record<ComCutBetType, number>>(() => {
+    try {
+      const currentR = localStorage.getItem('comcut_round_no') || '1388';
+      const saved = localStorage.getItem(`comcut_user_bets_${currentR}`);
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return {
+      COM: 0,
+      CUT: 0,
+      BAO_COM: 0,
+      BAO_CUT: 0,
+      COM_GA: 0,
+      CUT_RUOI: 0,
+    };
   });
+
   const [lastRoundBets, setLastRoundBets] = useState<Record<ComCutBetType, number>>({
     COM: 0,
     CUT: 0,
@@ -216,7 +240,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   const [poolCut, setPoolCut] = useState<number>(36113000);
   const [countCom, setCountCom] = useState<number>(48);
   const [countCut, setCountCut] = useState<number>(49);
-  const [recentLiveBets, setRecentLiveBets] = useState<BotBet[]>([]);
+  const [recentLiveBets, setRecentLiveBets] = useState<ComCutBotBet[]>([]);
 
   // Dices
   const [dices, setDices] = useState<[number, number, number]>([4, 5, 2]);
@@ -259,136 +283,62 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }
   };
 
-  // Sound triggers
-  useEffect(() => {
-    if (phase === 'SHAKING') {
-      sounds.playDiceShake();
-      setIsLidFullyOpen(false);
-      setLidOffset({ x: 0, y: 0 });
-    }
-  }, [phase]);
+  // Fresh Refs for state access inside callbacks
+  const userBetsRef = useRef(userBets);
+  useEffect(() => { userBetsRef.current = userBets; }, [userBets]);
 
-  // Main game timer
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev > 1) {
-          // Warning chime and notification when entering locked betting phase at 5 seconds
-          if (phase === 'BETTING' && prev === 6) {
-            sounds.playErrorBeep();
-            setScoreNotification({
-              text: '🔒 HẾT THỜI GIAN ĐẶT! HỆ THỐNG ĐÃ KHÓA CƯỢC',
-              positive: false,
-            });
-            setTimeout(() => setScoreNotification(null), 2500);
-          }
+  const balanceRef = useRef(balance);
+  useEffect(() => { balanceRef.current = balance; }, [balance]);
 
-          // Dynamic live room bets (only during open betting window, stop when locked)
-          if (phase === 'BETTING' && prev > 6 && Math.random() > 0.35) {
-            const side: 'COM' | 'CUT' = Math.random() > 0.49 ? 'COM' : 'CUT';
-            const chipOpts = [20000, 50000, 100000, 200000, 500000, 1000000];
-            const amt = chipOpts[Math.floor(Math.random() * chipOpts.length)];
-            const bot = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+  const roundNumberRef = useRef(roundNumber);
+  useEffect(() => { roundNumberRef.current = roundNumber; }, [roundNumber]);
 
-            if (side === 'COM') {
-              setPoolCom((c) => c + amt);
-              setCountCom((c) => c + 1);
-            } else {
-              setPoolCut((c) => c + amt);
-              setCountCut((c) => c + 1);
-            }
-
-            setRecentLiveBets((list) => [
-              {
-                id: Math.random().toString(),
-                name: bot,
-                avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${bot}`,
-                side,
-                amount: amt,
-              },
-              ...list.slice(0, 10),
-            ]);
-          }
-          return prev - 1;
-        }
-
-        // Transitions
-        if (phase === 'BETTING') {
-          setPhase('SHAKING');
-          return 3;
-        } else if (phase === 'SHAKING') {
-          // Generate new dice values
-          const d1 = Math.floor(Math.random() * 6) + 1;
-          const d2 = Math.floor(Math.random() * 6) + 1;
-          const d3 = Math.floor(Math.random() * 6) + 1;
-          setDices([d1, d2, d3]);
-          setDiceRotations([
-            Math.floor(Math.random() * 30) - 15,
-            Math.floor(Math.random() * 30) - 15,
-            Math.floor(Math.random() * 30) - 15,
-          ]);
-
-          if (squeezeMode) {
-            setPhase('OPENING');
-            setIsLidFullyOpen(false);
-            setLidOffset({ x: 0, y: 0 });
-            return 8; // 8s to squeeze
-          } else {
-            finalizeRound([d1, d2, d3]);
-            return 4;
-          }
-        } else if (phase === 'OPENING') {
-          finalizeRound(dices);
-          return 4;
-        } else if (phase === 'RESULT') {
-          // New round
-          setRoundNumber((r) => {
-            const next = r + 1;
-            localStorage.setItem('comcut_round_no', next.toString());
-            return next;
-          });
-          setLastRoundBets({ ...userBets });
-          setUserBets({
-            COM: 0,
-            CUT: 0,
-            BAO_COM: 0,
-            BAO_CUT: 0,
-            COM_GA: 0,
-            CUT_RUOI: 0,
-          });
-          setLastWinAmount(0);
-          setLastResultOutcome(null);
-          setIsLidFullyOpen(false);
-          setLidOffset({ x: 0, y: 0 });
-          setPoolCom(32000000 + Math.floor(Math.random() * 20000000));
-          setPoolCut(30000000 + Math.floor(Math.random() * 20000000));
-          setCountCom(35 + Math.floor(Math.random() * 20));
-          setCountCut(33 + Math.floor(Math.random() * 20));
-          setPhase('BETTING');
-          return 25; // 20s cược + 5s khóa cược!
-        }
-        return 10;
+  // Synchronize user bets across open tabs via BroadcastChannel
+  const syncUserBetsAcrossTabs = (nextBets: Record<ComCutBetType, number>, nextBal: number) => {
+    try {
+      localStorage.setItem(`comcut_user_bets_${roundNumberRef.current}`, JSON.stringify(nextBets));
+    } catch {}
+    if (comCutSyncChannel) {
+      comCutSyncChannel.postMessage({
+        type: 'COMCUT_SYNC_BETS',
+        roundNumber: roundNumberRef.current,
+        userBets: nextBets,
+        balance: nextBal,
       });
-    }, 1000);
+    }
+  };
 
-    return () => clearInterval(timer);
-  }, [phase, dices, userBets, balance, squeezeMode]);
+  useEffect(() => {
+    if (!comCutSyncChannel) return;
+    const handleMsg = (e: MessageEvent) => {
+      const data = e.data;
+      if (data && data.type === 'COMCUT_SYNC_BETS' && data.roundNumber === roundNumberRef.current) {
+        if (data.userBets) {
+          setUserBets(data.userBets);
+        }
+      }
+    };
+    comCutSyncChannel.addEventListener('message', handleMsg);
+    return () => {
+      comCutSyncChannel.removeEventListener('message', handleMsg);
+    };
+  }, []);
 
-  // Finalize round and credit payout
-  const finalizeRound = (currentDices: [number, number, number]) => {
-    setIsLidFullyOpen(true);
-    setPhase('RESULT');
+  // Sync with Server Authoritative State
+  const prevPhaseRef = useRef<ComCutPhase>('BETTING');
+  const prevRoundRef = useRef<number>(roundNumber);
+  const prevTimeLeftRef = useRef<number>(timeLeft);
 
-    const [d1, d2, d3] = currentDices;
+  // Handle final result payout and audio
+  const handleServerResult = useCallback((s: ComCutGameState) => {
+    const [d1, d2, d3] = s.dices;
     const total = d1 + d2 + d3;
     const isBao = d1 === d2 && d2 === d3;
     const isBaoCom = isBao && d1 >= 4;
     const isBaoCut = isBao && d1 <= 3;
     const isCom = total >= 11 && total <= 17 && !isBao;
     const isCut = total >= 4 && total <= 10 && !isBao;
-    const outcome: 'COM' | 'CUT' = isBao ? (d1 >= 4 ? 'COM' : 'CUT') : (total >= 11 ? 'COM' : 'CUT');
-
-    setLastResultOutcome(outcome);
+    const outcome = s.outcome;
 
     if (outcome === 'COM') {
       sounds.playYumSound();
@@ -402,47 +352,28 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       sounds.playFartSound();
     }
 
-    const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-    setHistory((prev) => [
-      {
-        id: Math.random().toString(),
-        roundNumber,
-        dices: [d1, d2, d3],
-        total,
-        result: outcome,
-        isBao,
-        time: nowStr,
-      },
-      ...prev.slice(0, 49),
-    ]);
-
-    // Calculate winnings
+    const currentBets = userBetsRef.current;
     let winTotal = 0;
-    if (isCom && userBets.COM > 0) {
-      winTotal += userBets.COM * 1.98;
-    }
-    if (isCut && userBets.CUT > 0) {
-      winTotal += userBets.CUT * 1.98;
-    }
-    if (isBaoCom && userBets.BAO_COM > 0) {
-      winTotal += userBets.BAO_COM * 30;
-    }
-    if (isBaoCut && userBets.BAO_CUT > 0) {
-      winTotal += userBets.BAO_CUT * 30;
-    }
-    if ((total === 13 || total === 14) && userBets.COM_GA > 0) {
-      winTotal += userBets.COM_GA * 8;
-    }
-    if ((total === 7 || total === 8) && userBets.CUT_RUOI > 0) {
-      winTotal += userBets.CUT_RUOI * 8;
-    }
+    if (isCom && currentBets.COM > 0) winTotal += currentBets.COM * 1.98;
+    if (isCut && currentBets.CUT > 0) winTotal += currentBets.CUT * 1.98;
+    if (isBaoCom && currentBets.BAO_COM > 0) winTotal += currentBets.BAO_COM * 30;
+    if (isBaoCut && currentBets.BAO_CUT > 0) winTotal += currentBets.BAO_CUT * 30;
+    if ((total === 13 || total === 14) && currentBets.COM_GA > 0) winTotal += currentBets.COM_GA * 8;
+    if ((total === 7 || total === 8) && currentBets.CUT_RUOI > 0) winTotal += currentBets.CUT_RUOI * 8;
 
     if (winTotal > 0) {
       const finalWon = Math.floor(winTotal);
       setLastWinAmount(finalWon);
-      const nextBal = balance + finalWon;
-      onUpdateBalance(nextBal);
-      sounds.playWin();
+
+      // Deduplication with localStorage to ensure exactly 1 tab credits the balance
+      const payoutKey = `comcut_payout_awarded_${s.roundNumber}`;
+      const alreadyAwarded = localStorage.getItem(payoutKey);
+      if (!alreadyAwarded) {
+        localStorage.setItem(payoutKey, 'true');
+        const nextBal = balanceRef.current + finalWon;
+        onUpdateBalance(nextBal);
+        sounds.playWin();
+      }
 
       setScoreNotification({
         text: `+${finalWon.toLocaleString('vi-VN')} Xu`,
@@ -453,10 +384,101 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       confetti({
         particleCount: 120,
         spread: 90,
-        origin: { y: 0.5 },
+        origin: { y: 0.65 },
+        colors: ['#fbbf24', '#f59e0b', '#10b981', '#ffffff']
       });
     }
-  };
+  }, [onUpdateBalance]);
+
+  useEffect(() => {
+    if (!effectiveServerState) return;
+    const s = effectiveServerState;
+
+    setPhase(s.phase);
+    setTimeLeft(s.timeLeft);
+    setRoundNumber(s.roundNumber);
+    setPoolCom(s.poolCom);
+    setPoolCut(s.poolCut);
+    setCountCom(s.countCom);
+    setCountCut(s.countCut);
+    if (Array.isArray(s.history)) setHistory(s.history);
+    if (Array.isArray(s.recentLiveBets)) setRecentLiveBets(s.recentLiveBets);
+
+    // Warning chime when entering locked betting window at 5s
+    if (s.phase === 'BETTING' && s.timeLeft === 5 && prevTimeLeftRef.current !== 5) {
+      sounds.playErrorBeep();
+      setScoreNotification({
+        text: '🔒 HẾT THỜI GIAN ĐẶT! HỆ THỐNG ĐÃ KHÓA CƯỢC',
+        positive: false,
+      });
+      setTimeout(() => setScoreNotification(null), 2500);
+    }
+    prevTimeLeftRef.current = s.timeLeft;
+
+    // Check round number change
+    if (s.roundNumber !== prevRoundRef.current) {
+      prevRoundRef.current = s.roundNumber;
+      localStorage.setItem('comcut_round_no', s.roundNumber.toString());
+      setLastRoundBets({ ...userBetsRef.current });
+
+      try {
+        const saved = localStorage.getItem(`comcut_user_bets_${s.roundNumber}`);
+        if (saved) {
+          setUserBets(JSON.parse(saved));
+        } else {
+          setUserBets({ COM: 0, CUT: 0, BAO_COM: 0, BAO_CUT: 0, COM_GA: 0, CUT_RUOI: 0 });
+        }
+      } catch {
+        setUserBets({ COM: 0, CUT: 0, BAO_COM: 0, BAO_CUT: 0, COM_GA: 0, CUT_RUOI: 0 });
+      }
+
+      setLastWinAmount(0);
+      setLastResultOutcome(null);
+      setIsLidFullyOpen(false);
+      setLidOffset({ x: 0, y: 0 });
+    }
+
+    // Phase transitions
+    if (s.phase !== prevPhaseRef.current) {
+      prevPhaseRef.current = s.phase;
+
+      if (s.phase === 'SHAKING') {
+        sounds.playDiceShake();
+        setIsLidFullyOpen(false);
+        setLidOffset({ x: 0, y: 0 });
+      } else if (s.phase === 'OPENING') {
+        setDices(s.dices);
+        setDiceRotations(s.diceRotations);
+        if (!squeezeMode) {
+          setIsLidFullyOpen(true);
+        } else {
+          setIsLidFullyOpen(false);
+          setLidOffset({ x: 0, y: 0 });
+        }
+      } else if (s.phase === 'RESULT') {
+        setIsLidFullyOpen(true);
+        setDices(s.dices);
+        setDiceRotations(s.diceRotations);
+        setLastResultOutcome(s.outcome);
+
+        handleServerResult(s);
+      } else if (s.phase === 'BETTING') {
+        setIsLidFullyOpen(false);
+        setLidOffset({ x: 0, y: 0 });
+        setLastWinAmount(0);
+        setLastResultOutcome(null);
+      }
+    } else {
+      // Keep dice synced during OPENING and RESULT
+      if (s.phase === 'OPENING' || s.phase === 'RESULT') {
+        setDices(s.dices);
+        setDiceRotations(s.diceRotations);
+      }
+      if (s.phase === 'RESULT') {
+        setLastResultOutcome(s.outcome);
+      }
+    }
+  }, [effectiveServerState, squeezeMode, handleServerResult]);
 
   // Squeeze dragging
   const handleTouchOrMouseDown = (e: React.MouseEvent | React.TouchEvent) => {
@@ -484,20 +506,20 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     const dist = Math.sqrt(nextX * nextX + nextY * nextY);
     if (dist > 110) {
       setIsDraggingLid(false);
-      finalizeRound(dices);
+      setIsLidFullyOpen(true);
     }
-  }, [isDraggingLid, dices, isVirtualLandscape, windowDimensions.width]);
+  }, [isDraggingLid, isVirtualLandscape, windowDimensions.width]);
 
   const handleTouchOrMouseUp = useCallback(() => {
     if (!isDraggingLid) return;
     setIsDraggingLid(false);
     const dist = Math.sqrt(lidOffset.x * lidOffset.x + lidOffset.y * lidOffset.y);
     if (dist > 75) {
-      finalizeRound(dices);
+      setIsLidFullyOpen(true);
     } else {
       setLidOffset({ x: 0, y: 0 });
     }
-  }, [isDraggingLid, lidOffset, dices]);
+  }, [isDraggingLid, lidOffset]);
 
   useEffect(() => {
     if (isDraggingLid) {
@@ -538,10 +560,12 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     const nextBal = balance - selectedChip;
     onUpdateBalance(nextBal);
 
-    setUserBets((prev) => ({
-      ...prev,
-      [side]: prev[side] + selectedChip,
-    }));
+    const updatedBets = {
+      ...userBets,
+      [side]: userBets[side] + selectedChip,
+    };
+    setUserBets(updatedBets);
+    syncUserBetsAcrossTabs(updatedBets, nextBal);
 
     if (side === 'COM') setPoolCom((c) => c + selectedChip);
     if (side === 'CUT') setPoolCut((c) => c + selectedChip);
@@ -570,14 +594,14 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       sounds.playErrorBeep();
       return;
     }
-    onUpdateBalance(balance - currentTotal);
-    setUserBets((prev) => {
-      const doubled = { ...prev };
-      (Object.keys(doubled) as ComCutBetType[]).forEach((k) => {
-        doubled[k] = doubled[k] * 2;
-      });
-      return doubled;
+    const nextBal = balance - currentTotal;
+    onUpdateBalance(nextBal);
+    const doubled = { ...userBets };
+    (Object.keys(doubled) as ComCutBetType[]).forEach((k) => {
+      doubled[k] = doubled[k] * 2;
     });
+    setUserBets(doubled);
+    syncUserBetsAcrossTabs(doubled, nextBal);
     sounds.playChipClink();
   };
 
@@ -596,8 +620,11 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       sounds.playErrorBeep();
       return;
     }
-    onUpdateBalance(balance - previousTotal);
-    setUserBets({ ...lastRoundBets });
+    const nextBal = balance - previousTotal;
+    onUpdateBalance(nextBal);
+    const reBets = { ...lastRoundBets };
+    setUserBets(reBets);
+    syncUserBetsAcrossTabs(reBets, nextBal);
     sounds.playChipClink();
   };
 
@@ -608,15 +635,18 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }
     const totalPlaced = Object.values(userBets).reduce((a, b) => a + b, 0);
     if (totalPlaced > 0) {
-      onUpdateBalance(balance + totalPlaced);
-      setUserBets({
+      const nextBal = balance + totalPlaced;
+      onUpdateBalance(nextBal);
+      const cleared = {
         COM: 0,
         CUT: 0,
         BAO_COM: 0,
         BAO_CUT: 0,
         COM_GA: 0,
         CUT_RUOI: 0,
-      });
+      };
+      setUserBets(cleared);
+      syncUserBetsAcrossTabs(cleared, nextBal);
       sounds.playClick();
     }
   };
@@ -1121,27 +1151,21 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               )}
             </div>
 
-            {/* Quick Open or Fast Shake Button */}
+            {/* Quick Open or Live Room Indicator */}
             <div className="flex items-center gap-1 mt-0.5">
               {phase === 'OPENING' && !isLidFullyOpen && (
                 <button
-                  onClick={() => finalizeRound(dices)}
+                  type="button"
+                  onClick={() => setIsLidFullyOpen(true)}
                   className="px-2 py-0.5 rounded-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-[9px] shadow-md cursor-pointer active:scale-95"
                 >
                   MỞ NHANH ⚡
                 </button>
               )}
-              {phase === 'BETTING' && !isBetLocked && !isLandscapeActive && (
-                <button
-                  onClick={() => {
-                    setPhase('SHAKING');
-                    setTimeLeft(3);
-                  }}
-                  className="px-2 py-0.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[10px] font-bold cursor-pointer"
-                >
-                  Xóc Ngay
-                </button>
-              )}
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/60 border border-emerald-500/40 text-[9px] font-black text-emerald-400 tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping inline-block" />
+                <span>LIVE SYNC</span>
+              </span>
             </div>
 
             {/* Win announcement badge */}

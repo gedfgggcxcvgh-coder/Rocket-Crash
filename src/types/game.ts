@@ -130,3 +130,47 @@ export interface LeaderboardItem {
   vipTitle: string;
   badge: string;
 }
+
+export type ComCutPhase = 'BETTING' | 'SHAKING' | 'OPENING' | 'RESULT';
+export type ComCutBetType = 'COM' | 'CUT' | 'BAO_COM' | 'BAO_CUT' | 'COM_GA' | 'CUT_RUOI';
+
+export interface ComCutHistoryItem {
+  id: string;
+  roundNumber: number;
+  dices: [number, number, number];
+  total: number;
+  result: 'COM' | 'CUT';
+  isBao: boolean;
+  time: string;
+}
+
+export interface ComCutBotBet {
+  id: string;
+  name: string;
+  avatar: string;
+  side: 'COM' | 'CUT';
+  amount: number;
+}
+
+export interface ComCutGameState {
+  roundNumber: number;
+  phase: ComCutPhase;
+  timeLeft: number;
+  phaseStartTime: number;
+  phaseDuration: number;
+  dices: [number, number, number];
+  diceRotations: [number, number, number];
+  outcome: 'COM' | 'CUT';
+  total: number;
+  isBao: boolean;
+  isBaoCom: boolean;
+  isBaoCut: boolean;
+  poolCom: number;
+  poolCut: number;
+  countCom: number;
+  countCut: number;
+  recentLiveBets: ComCutBotBet[];
+  history: ComCutHistoryItem[];
+  serverTime?: number;
+  userBets?: Record<ComCutBetType, number>;
+}

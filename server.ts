@@ -90,6 +90,60 @@ async function startServer() {
     'AnhBa_BaoSàn', 'Tùng_ChốtNon', 'Minh_TayVàng'
   ];
 
+  const COMCUT_BOT_NAMES = [
+    'Thánh_Ăn_Cơm', 'Húp_Cứt_Cay_Cú', 'Nam_BaoSàn', 'Tuấn_BẻCầu',
+    'Long_CháyTúi', 'Minh_GỡNợ', 'Đạt_GàBéo', 'Hoàng_TấtTay',
+    'Bảo_ThíchCơmSườn', 'Sơn_ĂnCứtChuyênNghiệp', 'Trùm_LắcBát', 'Huy_MêCơmTấm',
+    'Bình_BẻCầuGãyTay', 'Tài_Xỉu_Cơm_Cứt', 'Đại_Gia_Allin'
+  ];
+
+  interface ComCutHistoryItemServer {
+    id: string;
+    roundNumber: number;
+    dices: [number, number, number];
+    total: number;
+    result: 'COM' | 'CUT';
+    isBao: boolean;
+    time: string;
+  }
+
+  interface ComCutBotBetServer {
+    id: string;
+    name: string;
+    avatar: string;
+    side: 'COM' | 'CUT';
+    amount: number;
+  }
+
+  let globalComCutState = {
+    roundNumber: 1388,
+    phase: 'BETTING' as 'BETTING' | 'SHAKING' | 'OPENING' | 'RESULT',
+    timeLeft: 25,
+    phaseStartTime: Date.now(),
+    phaseDuration: 25,
+    dices: [4, 5, 2] as [number, number, number],
+    diceRotations: [12, -8, 25] as [number, number, number],
+    outcome: 'COM' as 'COM' | 'CUT',
+    total: 11,
+    isBao: false,
+    isBaoCom: false,
+    isBaoCut: false,
+    poolCom: 36247000,
+    poolCut: 36113000,
+    countCom: 48,
+    countCut: 49,
+    recentLiveBets: [] as ComCutBotBetServer[],
+    history: [
+      { id: '1', roundNumber: 1384, dices: [4, 5, 3] as [number, number, number], total: 12, result: 'COM' as const, isBao: false, time: '14:20' },
+      { id: '2', roundNumber: 1385, dices: [1, 2, 4] as [number, number, number], total: 7, result: 'CUT' as const, isBao: false, time: '14:21' },
+      { id: '3', roundNumber: 1386, dices: [2, 3, 3] as [number, number, number], total: 8, result: 'CUT' as const, isBao: false, time: '14:22' },
+      { id: '4', roundNumber: 1387, dices: [6, 4, 5] as [number, number, number], total: 15, result: 'COM' as const, isBao: false, time: '14:23' },
+    ] as ComCutHistoryItemServer[],
+  };
+
+  // User bets per round on server: roundNumber -> userId -> side -> amount
+  const comCutUserBets: Record<number, Record<string, Record<string, number>>> = {};
+
   interface PlayerBetServer {
     id: string;
     username: string;
@@ -249,6 +303,8 @@ async function startServer() {
 
     const payload = JSON.stringify({
       ...globalGameState,
+      comCut: globalComCutState,
+      comCutUserBets: comCutUserBets[globalComCutState.roundNumber] || {},
       chat: globalChatMessages,
       userBalances,
       jackpotPool: globalJackpotPool,
@@ -264,6 +320,164 @@ async function startServer() {
   // Server Loop tick - 100ms
   setInterval(() => {
     const now = Date.now();
+
+    // --- Com Va Cut Game Sync Tick ---
+    const comCutElapsedSec = (now - globalComCutState.phaseStartTime) / 1000;
+    const comCutRemaining = Math.max(0, Math.ceil(globalComCutState.phaseDuration - comCutElapsedSec));
+    globalComCutState.timeLeft = comCutRemaining;
+
+    if (globalComCutState.phase === 'BETTING') {
+      // Random bot bets during betting window
+      if (comCutRemaining > 5 && Math.random() < 0.12) {
+        const side: 'COM' | 'CUT' = Math.random() > 0.49 ? 'COM' : 'CUT';
+        const chipOpts = [20000, 50000, 100000, 200000, 500000, 1000000];
+        const amt = chipOpts[Math.floor(Math.random() * chipOpts.length)];
+        const bot = COMCUT_BOT_NAMES[Math.floor(Math.random() * COMCUT_BOT_NAMES.length)];
+        if (side === 'COM') {
+          globalComCutState.poolCom += amt;
+          globalComCutState.countCom += 1;
+        } else {
+          globalComCutState.poolCut += amt;
+          globalComCutState.countCut += 1;
+        }
+        globalComCutState.recentLiveBets.unshift({
+          id: Math.random().toString(),
+          name: bot,
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${bot}`,
+          side,
+          amount: amt,
+        });
+        if (globalComCutState.recentLiveBets.length > 15) {
+          globalComCutState.recentLiveBets.pop();
+        }
+      }
+
+      if (comCutRemaining <= 0) {
+        globalComCutState.phase = 'SHAKING';
+        globalComCutState.phaseStartTime = now;
+        globalComCutState.phaseDuration = 3;
+        globalComCutState.timeLeft = 3;
+      }
+    } else if (globalComCutState.phase === 'SHAKING') {
+      if (comCutRemaining <= 0) {
+        const d1 = (Math.floor(Math.random() * 6) + 1) as number;
+        const d2 = (Math.floor(Math.random() * 6) + 1) as number;
+        const d3 = (Math.floor(Math.random() * 6) + 1) as number;
+        const total = d1 + d2 + d3;
+        const isBao = d1 === d2 && d2 === d3;
+        const isBaoCom = isBao && d1 >= 4;
+        const isBaoCut = isBao && d1 <= 3;
+        const outcome: 'COM' | 'CUT' = isBao ? (d1 >= 4 ? 'COM' : 'CUT') : (total >= 11 ? 'COM' : 'CUT');
+
+        globalComCutState.dices = [d1, d2, d3];
+        globalComCutState.diceRotations = [
+          Math.floor(Math.random() * 30) - 15,
+          Math.floor(Math.random() * 30) - 15,
+          Math.floor(Math.random() * 30) - 15,
+        ];
+        globalComCutState.total = total;
+        globalComCutState.isBao = isBao;
+        globalComCutState.isBaoCom = isBaoCom;
+        globalComCutState.isBaoCut = isBaoCut;
+        globalComCutState.outcome = outcome;
+
+        globalComCutState.phase = 'OPENING';
+        globalComCutState.phaseStartTime = now;
+        globalComCutState.phaseDuration = 8;
+        globalComCutState.timeLeft = 8;
+      }
+    } else if (globalComCutState.phase === 'OPENING') {
+      if (comCutRemaining <= 0) {
+        globalComCutState.phase = 'RESULT';
+        globalComCutState.phaseStartTime = now;
+        globalComCutState.phaseDuration = 4;
+        globalComCutState.timeLeft = 4;
+
+        const nowStr = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+        globalComCutState.history.unshift({
+          id: globalComCutState.roundNumber.toString() + '_' + now,
+          roundNumber: globalComCutState.roundNumber,
+          dices: globalComCutState.dices,
+          total: globalComCutState.total,
+          result: globalComCutState.outcome,
+          isBao: globalComCutState.isBao,
+          time: nowStr,
+        });
+        if (globalComCutState.history.length > 50) {
+          globalComCutState.history.pop();
+        }
+
+        // Payout to users who placed bets on this round
+        const currentRoundBets = comCutUserBets[globalComCutState.roundNumber];
+        if (currentRoundBets) {
+          const { outcome, total, isBao, isBaoCom, isBaoCut } = globalComCutState;
+          const isCom = !isBao && outcome === 'COM';
+          const isCut = !isBao && outcome === 'CUT';
+
+          Object.keys(currentRoundBets).forEach(uId => {
+            const bets = currentRoundBets[uId];
+            let winTotal = 0;
+            if (isCom && bets.COM) winTotal += bets.COM * 1.98;
+            if (isCut && bets.CUT) winTotal += bets.CUT * 1.98;
+            if (isBaoCom && bets.BAO_COM) winTotal += bets.BAO_COM * 30;
+            if (isBaoCut && bets.BAO_CUT) winTotal += bets.BAO_CUT * 30;
+            if ((total === 13 || total === 14) && bets.COM_GA) winTotal += bets.COM_GA * 8;
+            if ((total === 7 || total === 8) && bets.CUT_RUOI) winTotal += bets.CUT_RUOI * 8;
+
+            if (winTotal > 0 && userDatabase[uId]) {
+              const wonAmount = Math.floor(winTotal);
+              userDatabase[uId].balance = (userDatabase[uId].balance || 0) + wonAmount;
+              if (userDatabase[uId].stats) {
+                userDatabase[uId].stats!.wins = (userDatabase[uId].stats!.wins || 0) + 1;
+                const totalWageredRound = Object.values(bets).reduce((a, b) => a + b, 0);
+                userDatabase[uId].stats!.totalProfit = (userDatabase[uId].stats!.totalProfit || 0) + (wonAmount - totalWageredRound);
+              }
+            }
+          });
+          try {
+            fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+          } catch {}
+        }
+
+        // Funny chat comments from bots
+        if (Math.random() < 0.45) {
+          const bot = COMCUT_BOT_NAMES[Math.floor(Math.random() * COMCUT_BOT_NAMES.length)];
+          const comMsgs = [
+            `Húp trọn bát Cơm thơm phức rồi anh em ơi! 🍚🍗`,
+            `Ngon lành cành đào, theo Cơm là ấm cật! 🍚✨`,
+            `Cơm dẻo canh ngọt, ván này bú đẫm! 😋`,
+            `Ai ôm Cơm giơ tay, lụm lúa về bản! 💰`,
+          ];
+          const cutMsgs = [
+            `Đù má lại ỉa ra Cứt rồi, cay vãi nồi! 💩😭`,
+            `Cứt nhão nhoét luôn, anh em bơi hết ra đê chưa? 💩🚨`,
+            `Bệt Cứt 3 tay rồi nhà cái ơi, tha cho em! 💀`,
+            `Húp Cứt ngập mồm, ván sau tất tay đảo Cơm gỡ lại! 🔥`,
+          ];
+          const msgList = globalComCutState.outcome === 'COM' ? comMsgs : cutMsgs;
+          addServerChatMessage({
+            user: bot,
+            avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${bot}`,
+            text: msgList[Math.floor(Math.random() * msgList.length)],
+            time: nowStr,
+          });
+        }
+      }
+    } else if (globalComCutState.phase === 'RESULT') {
+      if (comCutRemaining <= 0) {
+        globalComCutState.roundNumber += 1;
+        globalComCutState.poolCom = 32000000 + Math.floor(Math.random() * 20000000);
+        globalComCutState.poolCut = 30000000 + Math.floor(Math.random() * 20000000);
+        globalComCutState.countCom = 35 + Math.floor(Math.random() * 20);
+        globalComCutState.countCut = 33 + Math.floor(Math.random() * 20);
+        globalComCutState.phase = 'BETTING';
+        globalComCutState.phaseStartTime = now;
+        globalComCutState.phaseDuration = 25;
+        globalComCutState.timeLeft = 25;
+      }
+    }
+
+    // --- Rocket Crash Game Tick ---
 
     if (globalGameState.status === 'COUNTDOWN') {
       globalGameState.countdown = Math.max(0, parseFloat((globalGameState.countdown - 0.1).toFixed(1)));
@@ -401,7 +615,94 @@ async function startServer() {
   app.get('/api/game/state', (req, res) => {
     res.json({
       ...globalGameState,
+      comCut: globalComCutState,
       serverTime: Date.now(),
+    });
+  });
+
+  // GET /api/comcut/state - Dedicated Cơm Hay Cứt State Snapshot
+  app.get('/api/comcut/state', (req, res) => {
+    const userId = req.query.userId as string | undefined;
+    const userBets = (userId && comCutUserBets[globalComCutState.roundNumber]?.[userId]) || undefined;
+    res.json({
+      ...globalComCutState,
+      userBets,
+      serverTime: Date.now(),
+    });
+  });
+
+  // POST /api/comcut/bet - Place a bet in Com Va Cut game
+  app.post('/api/comcut/bet', (req, res) => {
+    const { userId, side, amount, roundNumber } = req.body;
+    if (!userId || !side || !amount || amount <= 0) {
+      return res.status(400).json({ error: 'Thông tin cược không hợp lệ' });
+    }
+    if (globalComCutState.phase !== 'BETTING' || globalComCutState.timeLeft <= 5) {
+      return res.status(400).json({ error: 'Hệ thống đã khóa cược cho phiên này' });
+    }
+    if (roundNumber && roundNumber !== globalComCutState.roundNumber) {
+      return res.status(400).json({ error: 'Phiên cược đã chuyển sang vòng mới' });
+    }
+
+    const record = getUserRecord(userId);
+    if ((record.balance || 0) < amount) {
+      return res.status(400).json({ error: 'Số dư không đủ để đặt cược' });
+    }
+
+    record.balance = (record.balance || 0) - amount;
+    if (record.stats) {
+      record.stats.totalGames = (record.stats.totalGames || 0) + 1;
+      record.stats.totalWagered = (record.stats.totalWagered || 0) + amount;
+    }
+
+    const currentR = globalComCutState.roundNumber;
+    if (!comCutUserBets[currentR]) {
+      comCutUserBets[currentR] = {};
+    }
+    if (!comCutUserBets[currentR][userId]) {
+      comCutUserBets[currentR][userId] = {
+        COM: 0,
+        CUT: 0,
+        BAO_COM: 0,
+        BAO_CUT: 0,
+        COM_GA: 0,
+        CUT_RUOI: 0,
+      };
+    }
+    comCutUserBets[currentR][userId][side] = (comCutUserBets[currentR][userId][side] || 0) + amount;
+
+    // Update pool
+    if (side === 'COM' || side === 'COM_GA' || side === 'BAO_COM') {
+      globalComCutState.poolCom += amount;
+      globalComCutState.countCom += 1;
+    } else {
+      globalComCutState.poolCut += amount;
+      globalComCutState.countCut += 1;
+    }
+
+    // Add to recent live bets
+    globalComCutState.recentLiveBets.unshift({
+      id: Math.random().toString(),
+      name: record.username || 'Bạn',
+      avatar: record.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${userId}`,
+      side: (side === 'COM' || side === 'COM_GA' || side === 'BAO_COM') ? 'COM' : 'CUT',
+      amount,
+    });
+    if (globalComCutState.recentLiveBets.length > 20) {
+      globalComCutState.recentLiveBets.pop();
+    }
+
+    try {
+      fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
+    } catch {}
+
+    broadcastGameState();
+
+    res.json({
+      success: true,
+      balance: record.balance,
+      userBets: comCutUserBets[currentR][userId],
+      roundNumber: currentR,
     });
   });
 
@@ -412,7 +713,7 @@ async function startServer() {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
-    res.write(`data: ${JSON.stringify({ ...globalGameState, serverTime: Date.now() })}\n\n`);
+    res.write(`data: ${JSON.stringify({ ...globalGameState, comCut: globalComCutState, serverTime: Date.now() })}\n\n`);
 
     const client = { res };
     sseClients.push(client);
@@ -917,16 +1218,6 @@ async function startServer() {
     }
 
     res.json({ success: true, saved: userDatabase[discordId] });
-  });
-
-  // GET /api/user/:discordId - Retrieve synced user data
-  app.get('/api/user/:discordId', (req, res) => {
-    const { discordId } = req.params;
-    const userData = userDatabase[discordId];
-    if (!userData) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json(userData);
   });
 
   // Health check endpoint for Cloud Run and load balancers
