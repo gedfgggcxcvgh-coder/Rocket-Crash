@@ -83,12 +83,314 @@ async function startServer() {
     return parseFloat((45.00 + Math.pow((r - 0.94) / 0.06, 1.5) * 243.00).toFixed(2));
   }
 
-  const BOT_NAMES = [
-    'ThánhGồng_x100', 'Bảo_AllIn', 'Long_CayCú', 'Dũng_HúpBạc', 
-    'Trùm_NổSớm', 'Huy_CháyTúi', 'Tuấn_TayTo', 'Sơn_NonTay', 
-    'Đạt_GỡNợ', 'Khang_BịpVcl', 'Phúc_KhôMáu', 'Nam_ĂnNon',
-    'AnhBa_BaoSàn', 'Tùng_ChốtNon', 'Minh_TayVàng'
-  ];
+  type BotArchetype = 'DIAMOND' | 'SAFE' | 'WHALE' | 'MARTINGALE' | 'ORACLE';
+
+  interface BotConfig {
+    name: string;
+    archetype: BotArchetype;
+    badge: string;
+    badgeColor: string;
+    isWhale?: boolean;
+    amounts: number[];
+    minTarget: number;
+    maxTarget: number;
+    betQuotes: string[];
+    winQuotes: string[];
+    lossQuotes: string[];
+  }
+
+  const BOT_CONFIGS: Record<string, BotConfig> = {
+    'ThánhGồng_x100': {
+      name: 'ThánhGồng_x100',
+      archetype: 'DIAMOND',
+      badge: '💎 Gồng Thủ',
+      badgeColor: 'purple',
+      amounts: [500000, 1000000, 2000000, 5000000],
+      minTarget: 7.5,
+      maxTarget: 50.0,
+      betQuotes: [
+        'Đã gồng là phải tới nóc! Không x10 thì ra đê ở với vợ! 💎🚀',
+        'Tay to gồng kim cương, sàn không nuốt nổi tao đâu! 👑',
+        'Ván này tao nhắm x25, đứa nào chốt non đứng sang một bên! 🔥',
+      ],
+      winQuotes: [
+        'THẤY CHƯA?? BẢO GỒNG LÀ GỒNG! Húp trọn {win} Xu ở {mult}x!! 💎👑✨',
+        'ĐẲNG CẤP GỒNG THỦ! {mult}x ngọt nước, +{win} Xu bỏ két sắt! 💰🚀',
+      ],
+      lossQuotes: [
+        'Má nó cay thật, gồng tới {mult}x thì toang, ván sau x2 tiền khô máu tiếp! 😭',
+        'Chưa chạm đỉnh đã nổ, nhà cái ghen tị với đôi tay kim cương của tao à! 🤬',
+      ],
+    },
+    'Bảo_AllIn': {
+      name: 'Bảo_AllIn',
+      archetype: 'DIAMOND',
+      badge: '💎 Gồng Thủ',
+      badgeColor: 'purple',
+      amounts: [1000000, 2500000, 5000000],
+      minTarget: 5.0,
+      maxTarget: 25.0,
+      betQuotes: [
+        'Tất tay khô máu! Một là đổi đời hai là ăn mì tôm cả tháng! 💥',
+        'Vào tiền là phải dứt khoát! Ván này đéo x5 đéo chịu về!',
+      ],
+      winQuotes: [
+        'HÚP TẤT TAY! +{win} Xu ở {mult}x, đêm nay cả xóm có lẩu ăn! 🍲🍻',
+        'Thần tài gõ cửa! Bú trọn +{win} Xu đỉnh chóp anh em ơi! 🎉',
+      ],
+      lossQuotes: [
+        'Toang mẹ sổ đỏ rồi, ai cứu với ván này nổ sớm thế! 💀',
+      ],
+    },
+    'Khang_BịpVcl': {
+      name: 'Khang_BịpVcl',
+      archetype: 'DIAMOND',
+      badge: '💎 Gồng Thủ',
+      badgeColor: 'purple',
+      amounts: [800000, 2000000, 6000000],
+      minTarget: 6.0,
+      maxTarget: 30.0,
+      betQuotes: [
+        'Nhà cái bịp thì tao cũng bịp lại! Gồng tới {bet} Xu xem ai gan dạ hơn! 😈',
+        'Chuyến bay này tao đặt vé VIP, đứa nào nhảy trước là gà!',
+      ],
+      winQuotes: [
+        'Bịp lại nhà cái thành công rực rỡ! +{win} Xu ở {mult}x, cay chưa con trai! 😈',
+      ],
+      lossQuotes: [
+        'Bị bắt bài rồi vcl, nhà cái quả này tinh tướng thật 😤',
+      ],
+    },
+    'Nam_ĂnNon': {
+      name: 'Nam_ĂnNon',
+      archetype: 'SAFE',
+      badge: '🛡️ Ăn Non',
+      badgeColor: 'emerald',
+      amounts: [300000, 800000, 1500000],
+      minTarget: 1.25,
+      maxTarget: 1.75,
+      betQuotes: [
+        'Ăn non trường thọ anh em ơi, tích tiểu thành đại cho lành 🛡️',
+        'Cứ 1.x là tao nhảy, chê ít thì cút ra ngoài xem ai sống lâu hơn haha',
+      ],
+      winQuotes: [
+        'Bỏ túi +{win} Xu ở {mult}x nhẹ nhàng! Mấy ông gồng tí nữa khóc tiếng Mán cho xem 😏🛡️',
+        'Ấm cật +{win} Xu! Cứ đều đặn ngày chục củ là ấm, gồng làm đéo gì đau tim ☕',
+      ],
+      lossQuotes: [
+        'Đù má nổ ở {mult}x thì chịu rồi, nhà cái quay xe khét lẹt thế 😭',
+      ],
+    },
+    'Tùng_ChốtNon': {
+      name: 'Tùng_ChốtNon',
+      archetype: 'SAFE',
+      badge: '🛡️ Ăn Non',
+      badgeColor: 'emerald',
+      amounts: [200000, 500000, 1200000],
+      minTarget: 1.30,
+      maxTarget: 1.85,
+      betQuotes: [
+        'Vẩy nhẹ {bet} Xu kiếm bữa lẩu hải sản, nhảy sớm cho chắc củ 🍲',
+      ],
+      winQuotes: [
+        'Húp +{win} Xu thơm phức! Cơm no áo ấm không phải lo nghĩ 🛡️',
+      ],
+      lossQuotes: [
+        'Vừa bấm vào đã bùm ở {mult}x, nhà cái không cho kiếm bát phở sáng à 🍜',
+      ],
+    },
+    'Sơn_NonTay': {
+      name: 'Sơn_NonTay',
+      archetype: 'SAFE',
+      badge: '🛡️ Ăn Non',
+      badgeColor: 'emerald',
+      amounts: [250000, 500000, 1000000],
+      minTarget: 1.20,
+      maxTarget: 1.65,
+      betQuotes: [
+        'Em gan bé, chỉ mong kiếm hộp sữa cho con thôi các bác nhường em 🍼',
+      ],
+      winQuotes: [
+        'Chốt vội {mult}x húp +{win} Xu! May quá nhảy kịp không thì toang mạng! 🍼',
+      ],
+      lossQuotes: [
+        'Trời ơi nổ {mult}x khét thế, hộp sữa của con em bay màu rồi 😭',
+      ],
+    },
+    'Tuấn_TayTo': {
+      name: 'Tuấn_TayTo',
+      archetype: 'WHALE',
+      badge: '🐋 Cá Mập',
+      badgeColor: 'amber',
+      isWhale: true,
+      amounts: [5000000, 10000000, 20000000, 30000000],
+      minTarget: 1.85,
+      maxTarget: 4.20,
+      betQuotes: [
+        'Cá mập vào lệnh {bet} Xu! Cả phòng né ra cho sóng đánh dạt vào bờ! 🐋🌊',
+        'Vẩy nhẹ chục triệu Xu cà phê sáng! Để xem tàu bay được đến đâu! 💰',
+      ],
+      winQuotes: [
+        '🐋 CÁ MẬP NUỐT TRỌN +{win} Xu Ở {mult}x! Cảm ơn nhà cái đã tài trợ chuyến du lịch Dubai! 👑✈️',
+        'Bú đậm +{win} Xu! Anh em vỗ tay chúc mừng đại gia phát nào! 👏🎉',
+      ],
+      lossQuotes: [
+        'Cháy vài chục triệu bọ, muỗi đốt inox! Ván sau tao bơm thêm 100 triệu đập nát sàn! 💸',
+      ],
+    },
+    'AnhBa_BaoSàn': {
+      name: 'AnhBa_BaoSàn',
+      archetype: 'WHALE',
+      badge: '🐋 Cá Mập',
+      badgeColor: 'amber',
+      isWhale: true,
+      amounts: [10000000, 25000000, 50000000],
+      minTarget: 2.00,
+      maxTarget: 3.80,
+      betQuotes: [
+        'Sàn này anh Ba bao trọn gói {bet} Xu! Tàu bay uy tín lên nào em ơi! 🚀',
+        'Hôm nay anh Ba giải ngân {bet} Xu, ai đi cùng tàu hưởng lộc chung!',
+      ],
+      winQuotes: [
+        '👑 ANH BA HÚP +{win} Xu! Tiền về đầy ví, phát lộc cho anh em có dám nhận không? 🧧',
+      ],
+      lossQuotes: [
+        'Rơi mất vài đồng lẻ, coi như bố thí cho phi hành đoàn! Ván sau lấy lại gấp đôi! 😎',
+      ],
+    },
+    'Minh_TayVàng': {
+      name: 'Minh_TayVàng',
+      archetype: 'WHALE',
+      badge: '🐋 Cá Mập',
+      badgeColor: 'amber',
+      isWhale: true,
+      amounts: [8000000, 15000000, 35000000],
+      minTarget: 2.10,
+      maxTarget: 4.50,
+      betQuotes: [
+        'Tay vàng chạm đâu ra tiền đấy! Đặt nhẹ {bet} Xu lấy vía may mắn ✨',
+      ],
+      winQuotes: [
+        'Húp trọn +{win} Xu nhẹ nhàng! Đôi tay vàng vẫn giữ vững phong độ đỉnh cao 🪙',
+      ],
+      lossQuotes: [
+        'Hôm nay vía hơi đen nổ ở {mult}x, để tí ra thắp hương lại rồi vào quẩy tiếp!',
+      ],
+    },
+    'Phúc_KhôMáu': {
+      name: 'Phúc_KhôMáu',
+      archetype: 'MARTINGALE',
+      badge: '⚡ Gấp Thếp',
+      badgeColor: 'rose',
+      amounts: [500000, 1500000, 3500000, 8000000],
+      minTarget: 2.00,
+      maxTarget: 3.50,
+      betQuotes: [
+        'Máu dồn lên não rồi! Ván này gấp thếp x2 tiền cược {bet} Xu phục thù! ⚡🔥',
+        'Không tin sàn bịp được mãi! Phang mạnh {bet} Xu đập tan cầu đen!',
+      ],
+      winQuotes: [
+        '⚡ GẤP THẾP THÀNH CÔNG RỰC RỠ! Lấy lại cả vốn lẫn lãi +{win} Xu, quá đãaaa! 🚀',
+      ],
+      lossQuotes: [
+        'Càng thua càng phải gấp! Ván sau tao nhân 3 cược, đéo tin không về bờ! 🤬⚡',
+      ],
+    },
+    'Huy_CháyTúi': {
+      name: 'Huy_CháyTúi',
+      archetype: 'MARTINGALE',
+      badge: '⚡ Gấp Thếp',
+      badgeColor: 'rose',
+      amounts: [400000, 1000000, 2500000, 6000000],
+      minTarget: 2.20,
+      maxTarget: 3.80,
+      betQuotes: [
+        'Còn cái nịt cũng phải đập vào! Ván này gấp thếp {bet} Xu gỡ nợ! 💸',
+      ],
+      winQuotes: [
+        'Cứu được cái túi thủng rồi anh em ơi! +{win} Xu hồi sinh ngoạn mục! 🌟',
+      ],
+      lossQuotes: [
+        'Cháy túi tập 2 nổ ở {mult}x rồi má ơi, ai cho vay ít Xu gỡ gạc cứu tao với 😭',
+      ],
+    },
+    'Long_CayCú': {
+      name: 'Long_CayCú',
+      archetype: 'MARTINGALE',
+      badge: '⚡ Gấp Thếp',
+      badgeColor: 'rose',
+      amounts: [600000, 1500000, 4000000],
+      minTarget: 2.40,
+      maxTarget: 4.00,
+      betQuotes: [
+        'Cay cú vcl ván trước hụt! Ván này bơm {bet} Xu đấm thẳng mặt nhà cái!',
+      ],
+      winQuotes: [
+        'Đấy! Phải thế chứ! Trả thù ngọt ngào +{win} Xu ở {mult}x!! 🥊',
+      ],
+      lossQuotes: [
+        'Cay gấp bội phần rồi!! Thề không đập nát sàn này tao không ngủ! 🔥',
+      ],
+    },
+    'Thầy_Bói_RaCầu': {
+      name: 'Thầy_Bói_RaCầu',
+      archetype: 'ORACLE',
+      badge: '🔮 Soi Cầu',
+      badgeColor: 'cyan',
+      amounts: [500000, 1200000, 2500000],
+      minTarget: 2.20,
+      maxTarget: 5.50,
+      betQuotes: [
+        '🔮 Quẻ bói hôm nay chỉ ra: Sao Hỏa hội tụ, chuyến này bay vượt x3 anh em theo thầy! 🪐',
+        'Thầy soi cầu 5 ván gần nhất thấy nhịp rồng bay, đặt {bet} Xu chuẩn chỉ!',
+      ],
+      winQuotes: [
+        'Thầy đã phán thì cấm có sai! Húp +{win} Xu ở {mult}x, mau quỳ xuống lạy thầy đi con! 🔮🙏',
+      ],
+      lossQuotes: [
+        'Quẻ nổ ở {mult}x bị mây mù che khuất, phong thủy hôm nay có chút nhiễu loạn rồi khà khà...',
+      ],
+    },
+    'Đạt_GỡNợ': {
+      name: 'Đạt_GỡNợ',
+      archetype: 'ORACLE',
+      badge: '🔮 Soi Cầu',
+      badgeColor: 'cyan',
+      amounts: [400000, 1000000, 2000000],
+      minTarget: 2.10,
+      maxTarget: 4.20,
+      betQuotes: [
+        'Theo thuật toán cầu bệt, ván này chắc chắn hồi phục x2.5! Vào {bet} Xu!',
+      ],
+      winQuotes: [
+        'Bắt đúng sóng rồi! +{win} Xu trả bớt được cục nợ tháng này, mừng rơi nước mắt 🥹',
+      ],
+      lossQuotes: [
+        'Cầu gãy đôi ở {mult}x rồi các ông ơi, thuật toán gì tầm này nữa 💀',
+      ],
+    },
+    'Dũng_HúpBạc': {
+      name: 'Dũng_HúpBạc',
+      archetype: 'ORACLE',
+      badge: '🔮 Soi Cầu',
+      badgeColor: 'cyan',
+      amounts: [600000, 1500000, 3500000],
+      minTarget: 2.30,
+      maxTarget: 5.00,
+      betQuotes: [
+        'Đã ngửi thấy mùi bạc rơi, ván này {bet} Xu bay đẹp anh em đừng nhảy vội!',
+      ],
+      winQuotes: [
+        'Húp trọn mâm bạc +{win} Xu! Cảm giác ngửi mùi không bao giờ phản bội!',
+      ],
+      lossQuotes: [
+        'Mùi khét lẹt nổ banh xác ở {mult}x rồi, mũi nghẹt cmnr 🤧',
+      ],
+    },
+  };
+
+  const BOT_NAMES = Object.keys(BOT_CONFIGS);
+  const botLossStreak: Record<string, number> = {};
 
   const COMCUT_BOT_NAMES = [
     'Thánh_Ăn_Cơm', 'Húp_Cứt_Cay_Cú', 'Nam_BaoSàn', 'Tuấn_BẻCầu',
@@ -153,6 +455,10 @@ async function startServer() {
     targetMultiplier?: number;
     status: 'PENDING' | 'CASHED_OUT' | 'CRASHED';
     isBot?: boolean;
+    botArchetype?: BotArchetype;
+    badge?: string;
+    badgeColor?: string;
+    isWhale?: boolean;
   }
 
   interface ChatMessageServer {
@@ -166,10 +472,10 @@ async function startServer() {
   }
 
   let globalChatMessages: ChatMessageServer[] = [
-    { id: '1', user: 'Huy_CháyTúi', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Huy', text: 'Má ván trước vừa vào định gồng x50 thì toang, cay dái thật', time: '14:26' },
-    { id: '2', user: 'Tuấn_TayTo', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan', text: 'Non thì chịu đi chú em, vừa làm phát 50k xu ấm cật haha', time: '14:27' },
-    { id: '3', user: 'Bảo_AllIn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Bao', text: 'Ván này bố m tất tay khô máu, đéo tin k lên nổi x10!', time: '14:28' },
-    { id: '4', user: 'Nam_ĂnNon', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nam', text: 'Cứ 2x tao nhảy, ăn non cho lành cãi nhau làm đéo gì', time: '14:29' },
+    { id: '1', user: 'Huy_CháyTúi', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Huy', text: 'Má ván trước vừa vào định gồng x50 thì toang, cay dái thật', time: '14:26', badge: '⚡ Gấp Thếp' },
+    { id: '2', user: 'Tuấn_TayTo', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan', text: 'Non thì chịu đi chú em, vừa làm phát 20M xu ấm cật haha', time: '14:27', badge: '🐋 Cá Mập' },
+    { id: '3', user: 'Bảo_AllIn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Bao', text: 'Ván này bố m tất tay khô máu, đéo tin k lên nổi x10!', time: '14:28', badge: '💎 Gồng Thủ' },
+    { id: '4', user: 'Nam_ĂnNon', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nam', text: 'Cứ 1.5x tao nhảy, ăn non cho lành cãi nhau làm đéo gì', time: '14:29', badge: '🛡️ Ăn Non' },
   ];
 
   function addServerChatMessage(msg: Omit<ChatMessageServer, 'id'>): ChatMessageServer {
@@ -210,46 +516,60 @@ async function startServer() {
   };
 
   function generateServerBots(): PlayerBetServer[] {
-    const count = Math.floor(Math.random() * 6) + 6;
+    const count = Math.floor(Math.random() * 5) + 7; // 7 to 11 bots
     const shuffled = [...BOT_NAMES].sort(() => 0.5 - Math.random()).slice(0, count);
-    const amounts = [100000, 250000, 500000, 1000000, 2000000, 3500000, 5000000, 10000000];
-    
+
     const bots = shuffled.map((name, idx) => {
-      const betAmount = amounts[Math.floor(Math.random() * amounts.length)];
-      const roll = Math.random();
-      let target: number;
-      if (roll < 0.35) target = parseFloat((Math.random() * 1.5 + 1.35).toFixed(2));
-      else if (roll < 0.75) target = parseFloat((Math.random() * 4.5 + 2.8).toFixed(2));
-      else if (roll < 0.92) target = parseFloat((Math.random() * 12 + 7.5).toFixed(2));
-      else target = parseFloat((Math.random() * 40 + 20).toFixed(2));
+      const config = BOT_CONFIGS[name];
+      let baseAmt = config.amounts[Math.floor(Math.random() * config.amounts.length)];
+
+      // Martingale bot logic: double if lost previous round
+      const lossCount = botLossStreak[name] || 0;
+      if (config.archetype === 'MARTINGALE' && lossCount > 0) {
+        baseAmt = Math.min(baseAmt * Math.pow(2, Math.min(lossCount, 3)), 20000000);
+      }
+
+      // Calculate target multiplier based on bot archetype
+      const { minTarget, maxTarget } = config;
+      let target = parseFloat((minTarget + Math.random() * (maxTarget - minTarget)).toFixed(2));
+      if (config.archetype === 'DIAMOND' && Math.random() < 0.25) {
+        target = parseFloat((Math.random() * 35 + 15).toFixed(2));
+      }
 
       return {
         id: `bot_${idx}_${Date.now()}`,
         username: name,
         avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${name}`,
-        betAmount,
+        betAmount: baseAmt,
         targetMultiplier: target,
         status: 'PENDING' as const,
         isBot: true,
+        botArchetype: config.archetype,
+        badge: config.badge,
+        badgeColor: config.badgeColor,
+        isWhale: config.isWhale,
       };
     });
 
     // Random bot chat comment when placing bets
-    if (Math.random() < 0.45 && bots.length > 0) {
+    if (Math.random() < 0.65 && bots.length > 0) {
       const talker = bots[Math.floor(Math.random() * bots.length)];
+      const config = BOT_CONFIGS[talker.username];
       const betFormatted = talker.betAmount.toLocaleString('vi-VN');
-      const betComments = [
-        `Đù má ván này tao vẩy ${betFormatted} Xu khô máu, đéo x5 đéo làm người! 🔥`,
-        `Vừa ném ${betFormatted} Xu vào, anh em né ra cho đại gia thể hiện! 😎`,
-        `Cay vcl ván trước ăn lộn, ván này phang ${betFormatted} Xu gỡ gạc!`,
-        `Nhẹ nhàng ${betFormatted} Xu xem nhà cái quay hũ kiểu gì, định bịp tao à! 😈`,
-        `Tất tay ${betFormatted} Xu! Một là ăn tết to hai là ra đê ở! 🚀`,
-        `Ván này tao nhắm đến x10, anh em nào dám gồng theo không?`,
-      ];
+
+      let comment = '';
+      if (config.betQuotes && config.betQuotes.length > 0) {
+        const raw = config.betQuotes[Math.floor(Math.random() * config.betQuotes.length)];
+        comment = raw.replace('{bet}', betFormatted);
+      } else {
+        comment = `Đã vào ${betFormatted} Xu! Ván này bay cao nào anh em! 🚀`;
+      }
+
       addServerChatMessage({
         user: talker.username,
         avatar: talker.avatar,
-        text: betComments[Math.floor(Math.random() * betComments.length)],
+        text: comment,
+        badge: talker.badge,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
     }
@@ -276,6 +596,9 @@ async function startServer() {
           totalProfit: 0,
           highestMultiplier: 0,
           totalWagered: 0,
+          rankExp: 1000,
+          rankLevel: 1,
+          rankTier: 'BRONZE',
         },
       };
       try {
@@ -283,6 +606,24 @@ async function startServer() {
       } catch (err) {
         console.error('Failed to write user-database.json:', err);
       }
+    }
+    if (!userDatabase[userId].stats) {
+      userDatabase[userId].stats = {
+        totalGames: 0,
+        wins: 0,
+        losses: 0,
+        totalProfit: 0,
+        highestMultiplier: 0,
+        totalWagered: 0,
+        rankExp: 1000,
+        rankLevel: 1,
+        rankTier: 'BRONZE',
+      };
+    }
+    if (typeof userDatabase[userId].stats.rankExp !== 'number') {
+      const wag = userDatabase[userId].stats.totalWagered || 0;
+      const prof = Math.max(0, userDatabase[userId].stats.totalProfit || 0);
+      userDatabase[userId].stats.rankExp = Math.max(1000, Math.floor(wag / 1000) + Math.floor(prof / 500));
     }
     if (!userDatabase[userId].equippedSkin) {
       userDatabase[userId].equippedSkin = 'STANDARD';
@@ -317,6 +658,8 @@ async function startServer() {
     });
   }
 
+  let roundMilestoneFlags = { x5: false, x10: false };
+
   // Server Loop tick - 100ms
   setInterval(() => {
     const now = Date.now();
@@ -327,12 +670,22 @@ async function startServer() {
     globalComCutState.timeLeft = comCutRemaining;
 
     if (globalComCutState.phase === 'BETTING') {
-      // Random bot bets during betting window
-      if (comCutRemaining > 5 && Math.random() < 0.12) {
-        const side: 'COM' | 'CUT' = Math.random() > 0.49 ? 'COM' : 'CUT';
-        const chipOpts = [20000, 50000, 100000, 200000, 500000, 1000000];
-        const amt = chipOpts[Math.floor(Math.random() * chipOpts.length)];
+      // Upgraded tactical bot bets during betting window
+      if (comCutRemaining > 5 && Math.random() < 0.22) {
         const bot = COMCUT_BOT_NAMES[Math.floor(Math.random() * COMCUT_BOT_NAMES.length)];
+        let side: 'COM' | 'CUT' = Math.random() > 0.48 ? 'COM' : 'CUT';
+        
+        // Distinct bot personality in Com & Cut
+        if (bot === 'Thánh_Ăn_Cơm' || bot === 'Bảo_ThíchCơmSườn' || bot === 'Huy_MêCơmTấm') {
+          side = 'COM';
+        } else if (bot === 'Húp_Cứt_Cay_Cú' || bot === 'Sơn_ĂnCứtChuyênNghiệp') {
+          side = 'CUT';
+        }
+
+        const isWhale = bot === 'Nam_BaoSàn' || bot === 'Đại_Gia_Allin';
+        const chipOpts = isWhale ? [2000000, 5000000, 10000000] : [50000, 100000, 200000, 500000, 1000000];
+        const amt = chipOpts[Math.floor(Math.random() * chipOpts.length)];
+
         if (side === 'COM') {
           globalComCutState.poolCom += amt;
           globalComCutState.countCom += 1;
@@ -340,6 +693,7 @@ async function startServer() {
           globalComCutState.poolCut += amt;
           globalComCutState.countCut += 1;
         }
+
         globalComCutState.recentLiveBets.unshift({
           id: Math.random().toString(),
           name: bot,
@@ -347,8 +701,25 @@ async function startServer() {
           side,
           amount: amt,
         });
-        if (globalComCutState.recentLiveBets.length > 15) {
+        if (globalComCutState.recentLiveBets.length > 20) {
           globalComCutState.recentLiveBets.pop();
+        }
+
+        // Funny bot chat comments in Com & Cut
+        if (Math.random() < 0.15) {
+          const comcutComments = [
+            `Cầu Cơm đang bệt đẹp anh em theo tôi húp bát phở! 🍚🔥`,
+            `Vừa vẩy ${amt.toLocaleString('vi-VN')} Xu vào ${side === 'COM' ? 'Cơm' : 'Cứt'}, đéo tin không về bờ!`,
+            `Bẻ cầu sang ${side === 'COM' ? 'Cơm' : 'Cứt'} ván này! Đứa nào theo tao ấm cật! ⚡`,
+            `Bát này tao linh cảm Bão x30 đấy, anh em lót nhẹ ít Xu! 🌪️`,
+          ];
+          addServerChatMessage({
+            user: bot,
+            avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${bot}`,
+            badge: isWhale ? '🐋 CÁ MẬP' : '🍚 TÀI XỈU',
+            text: comcutComments[Math.floor(Math.random() * comcutComments.length)],
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
         }
       }
 
@@ -478,66 +849,119 @@ async function startServer() {
     }
 
     // --- Rocket Crash Game Tick ---
-
     if (globalGameState.status === 'COUNTDOWN') {
       globalGameState.countdown = Math.max(0, parseFloat((globalGameState.countdown - 0.1).toFixed(1)));
       if (globalGameState.countdown <= 0) {
         globalGameState.status = 'FLYING';
         globalGameState.startTime = now;
         globalGameState.multiplier = 1.00;
+        roundMilestoneFlags = { x5: false, x10: false };
       }
     } else if (globalGameState.status === 'FLYING') {
       const elapsedSec = (now - globalGameState.startTime) / 1000;
       const currentMult = parseFloat(Math.pow(Math.E, 0.06 * elapsedSec).toFixed(2));
+
+      // In-flight bot excitement milestones
+      if (currentMult >= 5.0 && !roundMilestoneFlags.x5) {
+        roundMilestoneFlags.x5 = true;
+        const flyingDiamond = globalGameState.players.find(p => p.isBot && p.status === 'PENDING' && (p.targetMultiplier || 0) > 5.0);
+        if (flyingDiamond) {
+          addServerChatMessage({
+            user: flyingDiamond.username,
+            avatar: flyingDiamond.avatar,
+            badge: flyingDiamond.badge,
+            text: `VƯỢT 5.0X RỒI ANH EM ƠI! TÀU BAY TÍT VCL, GỒNG TỚI NÓC NÀO! 🚀💎✨`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+        }
+      } else if (currentMult >= 10.0 && !roundMilestoneFlags.x10) {
+        roundMilestoneFlags.x10 = true;
+        const flyingGong = globalGameState.players.find(p => p.isBot && p.status === 'PENDING' && (p.targetMultiplier || 0) > 10.0);
+        if (flyingGong) {
+          addServerChatMessage({
+            user: flyingGong.username,
+            avatar: flyingGong.avatar,
+            badge: flyingGong.badge,
+            text: `ĐÙ MÁ 10X RỒI!! TIM ĐẬP 200 BPM VẪN GỒNG, HUYỀN THOẠI LÀ ĐÂY! 👑🚀💎`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
+        }
+      }
 
       if (currentMult >= globalGameState.crashPoint) {
         globalGameState.status = 'CRASHED';
         globalGameState.multiplier = globalGameState.crashPoint;
         globalGameState.crashedAt = now;
 
+        const crashedHumanPlayers: PlayerBetServer[] = [];
+
         globalGameState.players.forEach(p => {
           if (p.status === 'PENDING') {
             p.status = 'CRASHED';
+            if (p.isBot) {
+              botLossStreak[p.username] = (botLossStreak[p.username] || 0) + 1;
+            } else {
+              crashedHumanPlayers.push(p);
+            }
+          } else if (p.isBot && p.status === 'CASHED_OUT') {
+            botLossStreak[p.username] = 0;
           }
         });
 
-        // Add crash comment from bot
+        // Add crash comment from bot archetype
         const crashMultVal = globalGameState.crashPoint;
         const crashMultStr = crashMultVal.toFixed(2);
-        const randBot = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
-        
-        let crashSlangs: string[] = [];
-        if (crashMultVal < 1.35) {
-          crashSlangs = [
-            `ĐÙ MÁ NỔ ${crashMultStr}x??? NHÀ CÁI BỊP VCL KHÚC NÀY!! 🤬`,
-            `Chưa kịp chớp mắt đã BÙM ở ${crashMultStr}x, cay vãi cặt!! 😭`,
-            `Má nó nuốt sạch tiền cược trong 1 giây, ảo thật đấy!! 💀`,
-            `Game bịp đéo chịu được, vừa bấm cược xong nổ luôn!! 💩`,
-            `Nhà cái nuốt dày thế, giả lại tiền cược cho taooo! 🚨`,
-          ];
-        } else if (crashMultVal < 3.50) {
-          crashSlangs = [
-            `Vcl nổ ở ${crashMultStr}x, gồng thêm 0.2 nữa là húp cmnr cay vãi nồi!`,
-            `Biết thế chốt mẹ 2x cho lành, tham thì thâm vcl... 😮‍💨`,
-            `Nổ ngay trước mũi x3, cay đéo tả nổi các ông ạ!`,
-            `Lại cút mất tiền cược, ván sau xé xác nhà cái ra gỡ! 🔥`,
-            `Má ơi nổ ${crashMultStr}x vừa kịp cút, cay đắng thật!`,
-          ];
-        } else {
-          crashSlangs = [
-            `ĐÙ MÁ X${crashMultStr} KÌA CÓ AI GỒNG TỚI ĐÂY KHÔNG??? OÁCH VCL! 🚀✨`,
-            `Aiii chốt được ${crashMultStr}x giơ tay tao lạy phát!! Bay tít mù cmnl! 👑`,
-            `Vãi lờ x${crashMultStr}!! Tiếc vcl vừa nhảy x2 cmnr 😱`,
-            `Ăn đậm x${crashMultStr} rồi!! Chuyến này đổi đời cmnl anh em ơi! 💰💰`,
-          ];
+        const crashedBots = globalGameState.players.filter(p => p.isBot && p.status === 'CRASHED');
+        const randBotPlayer = crashedBots.length > 0
+          ? crashedBots[Math.floor(Math.random() * crashedBots.length)]
+          : globalGameState.players.find(p => p.isBot);
+
+        if (randBotPlayer) {
+          const config = BOT_CONFIGS[randBotPlayer.username];
+          let crashQuote = '';
+          if (config && config.lossQuotes && config.lossQuotes.length > 0) {
+            crashQuote = config.lossQuotes[Math.floor(Math.random() * config.lossQuotes.length)].replace('{mult}', crashMultStr);
+          } else {
+            crashQuote = `Nổ ở ${crashMultStr}x cay vãi nồi! Ván sau gỡ lại! 🔥`;
+          }
+
+          addServerChatMessage({
+            user: randBotPlayer.username,
+            avatar: randBotPlayer.avatar,
+            badge: randBotPlayer.badge,
+            text: crashQuote,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          });
         }
 
-        addServerChatMessage({
-          user: randBot,
-          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${randBot}`,
-          text: crashSlangs[Math.floor(Math.random() * crashSlangs.length)],
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        });
+        // Bots react to human player crash
+        if (crashedHumanPlayers.length > 0 && Math.random() < 0.65) {
+          const human = crashedHumanPlayers[0];
+          const primaryId = human.id.replace('_bet2', '');
+          const humanRecord = userDatabase[primaryId];
+          const humanName = humanRecord?.username || 'Bạn';
+
+          const sympathyBots = ['Nam_ĂnNon', 'Huy_CháyTúi', 'Tuấn_TayTo', 'ThánhGồng_x100'];
+          const reactingSympathyBot = sympathyBots[Math.floor(Math.random() * sympathyBots.length)];
+          const sympathyBotConfig = BOT_CONFIGS[reactingSympathyBot];
+
+          const sympathyTexts = [
+            `Chia buồn cùng bác @${humanName}, tàu nổ bất ngờ quá, ván sau xé xác nhà cái ra gỡ! 😭🔥`,
+            `Bác @${humanName} gồng nghẹt thở mà nổ ở ${crashMultStr}x tiếc vcl, tí làm lại ván mới nhé! 🚀`,
+            `Khổ thân bác @${humanName}, bảo chốt sớm như em đi không nghe haha 🤣`,
+            `Đừng buồn @${humanName} ơi, cờ bạc ăn nhau về sáng, ván sau tất tay phục thù! ⚡`,
+          ];
+
+          setTimeout(() => {
+            addServerChatMessage({
+              user: reactingSympathyBot,
+              avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${reactingSympathyBot}`,
+              badge: sympathyBotConfig?.badge,
+              text: sympathyTexts[Math.floor(Math.random() * sympathyTexts.length)],
+              time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            });
+          }, 800);
+        }
 
         globalGameState.history.unshift({
           id: globalGameState.roundId,
@@ -557,22 +981,27 @@ async function startServer() {
             p.status = 'CASHED_OUT';
             p.cashoutMultiplier = p.targetMultiplier;
 
-            // Bot flex in chat when cashing out
-            if (p.isBot && Math.random() < 0.28) {
+            // Bot flex in chat when cashing out with archetype quotes
+            if (p.isBot && Math.random() < 0.45) {
               const win = Math.floor(p.betAmount * p.targetMultiplier);
               const winStr = win.toLocaleString('vi-VN');
               const multStr = p.targetMultiplier.toFixed(2);
-              const flexSlangs = [
-                `Húp ngọt +${winStr} Xu ở ${multStr}x!! Tuổi lờ ăn được tao haha 😏`,
-                `Chốt ${multStr}x húp tạm +${winStr} Xu làm cốc bia, cãi nhau với nhà cái làm đéo gì 🍺`,
-                `Vẩy nhẹ ${multStr}x bú +${winStr} Xu, gồng làm đéo gì cho đau tim anh em ơi! 🔥`,
-                `Húp +${winStr} Xu ấm cật vcl!! Đủ tiền bao người yêu đi nghỉ dưỡng weekend! 🏖️`,
-                `Đại gia chốt ${multStr}x húp +${winStr} Xu! Anh em ở lại gồng vui vẻ nhé 👋`,
-              ];
+              const config = BOT_CONFIGS[p.username];
+
+              let flexText = '';
+              if (config && config.winQuotes && config.winQuotes.length > 0) {
+                flexText = config.winQuotes[Math.floor(Math.random() * config.winQuotes.length)]
+                  .replace('{win}', winStr)
+                  .replace('{mult}', multStr);
+              } else {
+                flexText = `Húp +${winStr} Xu ở ${multStr}x ngọt nước! 🚀`;
+              }
+
               addServerChatMessage({
                 user: p.username,
                 avatar: p.avatar,
-                text: flexSlangs[Math.floor(Math.random() * flexSlangs.length)],
+                badge: p.badge,
+                text: flexText,
                 time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
               });
             }
@@ -873,6 +1302,32 @@ async function startServer() {
       fs.writeFileSync(USER_DB_FILE_PATH, JSON.stringify(userDatabase, null, 2));
     } catch {}
 
+    // Bot admiration reaction when player cashes out big
+    if (effectiveMult >= 2.5 || effectiveWin >= 3000000) {
+      const uName = userRecord.username || 'Bạn';
+      const hypeBots = ['ThánhGồng_x100', 'Tuấn_TayTo', 'Nam_ĂnNon', 'Thầy_Bói_RaCầu', 'Minh_TayVàng'];
+      const reactingBot = hypeBots[Math.floor(Math.random() * hypeBots.length)];
+      const botConfig = BOT_CONFIGS[reactingBot];
+
+      const hypeTexts = [
+        `Vãi chưởng @${uName} chốt quả ${effectiveMult.toFixed(2)}x húp +${effectiveWin.toLocaleString('vi-VN')} Xu đỉnh nóc kịch trần! 👑🔥`,
+        `Tay to vcl bác @${uName}! Nhận của em một lạy sư phụ ơi! 🙇‍♂️✨`,
+        `Bác @${uName} gồng uy tín thế! Bú đậm +${effectiveWin.toLocaleString('vi-VN')} Xu tối nay bao anh em bia nhé! 🍺💰`,
+        `Đẳng cấp thật sự @${uName}, quả đấy gồng nghẹt thở luôn mà vẫn húp ngọt! 🚀`,
+      ];
+
+      setTimeout(() => {
+        addServerChatMessage({
+          user: reactingBot,
+          avatar: `https://api.dicebear.com/7.x/bottts/svg?seed=${reactingBot}`,
+          badge: botConfig?.badge,
+          text: hypeTexts[Math.floor(Math.random() * hypeTexts.length)],
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        });
+        broadcastGameState();
+      }, 600);
+    }
+
     broadcastGameState();
     res.json({
       success: true,
@@ -901,28 +1356,252 @@ async function startServer() {
     res.json({ success: true, message: createdMsg });
   });
 
-  // GET /api/game/leaderboard - Top Players Leaderboard
+  // Helper to determine rank tier and level from EXP
+  function getTierFromExp(exp: number): { tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'MASTER' | 'LEGEND'; level: number; title: string } {
+    if (exp >= 2000000) return { tier: 'LEGEND', level: 13, title: 'Thần Bài Vũ Trụ 👑✨' };
+    if (exp >= 1000000) return { tier: 'MASTER', level: 12, title: 'Chiến Thần Vũ Trụ 👑' };
+    if (exp >= 550000) return { tier: 'DIAMOND', level: 11, title: 'Gồng Thủ Kim Cương 💎' };
+    if (exp >= 360000) return { tier: 'PLATINUM', level: 10, title: 'Chiến Hạm Bất Bại 💠' };
+    if (exp >= 260000) return { tier: 'GOLD', level: 9, title: 'Thần Tài Gõ Cửa 🥇' };
+    if (exp >= 180000) return { tier: 'GOLD', level: 8, title: 'Đại Gia Sàn Đấu 🥇' };
+    if (exp >= 120000) return { tier: 'GOLD', level: 7, title: 'Bậc Thầy Chốt Lời 🥇' };
+    if (exp >= 80000) return { tier: 'SILVER', level: 6, title: 'Cao Thủ Cầu Kèo 🥈' };
+    if (exp >= 50000) return { tier: 'SILVER', level: 5, title: 'Bậc Thầy Lắc Bát 🥈' };
+    if (exp >= 30000) return { tier: 'SILVER', level: 4, title: 'Thợ Săn Tên Lửa 🥈' };
+    if (exp >= 15000) return { tier: 'BRONZE', level: 3, title: 'Phi Công Tập Sự 🥉' };
+    if (exp >= 5000) return { tier: 'BRONZE', level: 2, title: 'Tân Binh Lão Luyện 🥉' };
+    return { tier: 'BRONZE', level: 1, title: 'Tân Binh Vũ Trụ 🥉' };
+  }
+
+  // GET /api/game/leaderboard - Top Players Unified Leaderboard (Both Games & Ranks)
   app.get('/api/game/leaderboard', (req, res) => {
-    const mockBotsLeaderboard = [
-      { id: 'b1', username: 'ThánhGồng_x100', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ThánhGồng_x100', totalProfit: 85200000, highestMultiplier: 104.50, wins: 42, vipTitle: 'Vua Gồng Lãi 👑', badge: 'VIP' },
-      { id: 'b2', username: 'ĐạiGia_SàiGòn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=DaiGia', totalProfit: 62400000, highestMultiplier: 78.20, wins: 38, vipTitle: 'Đại Gia Tên Lửa 💰', badge: 'VIP' },
-      { id: 'b3', username: 'Bảo_AllIn', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Bao', totalProfit: 41800000, highestMultiplier: 45.10, wins: 29, vipTitle: 'Thần Tài Vũ Trụ ⚡', badge: 'VIP' },
-      { id: 'b4', username: 'Tuấn_TayTo', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan', totalProfit: 35000000, highestMultiplier: 32.80, wins: 25, vipTitle: 'Sát Thủ Tên Lửa 🎯', badge: 'VIP' },
-      { id: 'b5', username: 'Phúc_KhôMáu', avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Phuc', totalProfit: 28400000, highestMultiplier: 28.50, wins: 21, vipTitle: 'Chiến Hạm Thép 🚀', badge: 'VIP' },
+    const mockUnifiedBotsLeaderboard = [
+      {
+        id: 'bot_legend_1',
+        username: 'ThánhGồng_x100',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ThánhGồng_x100',
+        totalProfit: 85200000,
+        totalWagered: 120000000,
+        highestMultiplier: 104.50,
+        wins: 62,
+        totalGames: 80,
+        rocketProfit: 62000000,
+        rocketWins: 42,
+        comCutProfit: 23200000,
+        comCutWins: 20,
+        comCutBaoWins: 3,
+        rankTier: 'LEGEND' as const,
+        rankLevel: 13,
+        rankExp: 2850000,
+        vipTitle: 'Bá Chủ Thiên Hà 👑',
+        badge: '👑 THẦN THOẠI',
+        isBot: true,
+      },
+      {
+        id: 'bot_legend_2',
+        username: 'AnhBa_BaoSàn',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=AnhBa',
+        totalProfit: 76800000,
+        totalWagered: 190000000,
+        highestMultiplier: 42.00,
+        wins: 58,
+        totalGames: 75,
+        rocketProfit: 41800000,
+        rocketWins: 31,
+        comCutProfit: 35000000,
+        comCutWins: 27,
+        comCutBaoWins: 7,
+        rankTier: 'LEGEND' as const,
+        rankLevel: 13,
+        rankExp: 2420000,
+        vipTitle: 'Trùm Cuối Cá Mập 🐋',
+        badge: '👑 THẦN THOẠI',
+        isBot: true,
+      },
+      {
+        id: 'bot_master_1',
+        username: 'Tuấn_TayTo',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Tuan',
+        totalProfit: 68400000,
+        totalWagered: 110000000,
+        highestMultiplier: 38.40,
+        wins: 51,
+        totalGames: 68,
+        rocketProfit: 42400000,
+        rocketWins: 33,
+        comCutProfit: 26000000,
+        comCutWins: 18,
+        comCutBaoWins: 4,
+        rankTier: 'MASTER' as const,
+        rankLevel: 12,
+        rankExp: 1840000,
+        vipTitle: 'Chiến Thần Vũ Trụ ⚔️',
+        badge: '👑 CAO THỦ',
+        isBot: true,
+      },
+      {
+        id: 'bot_master_2',
+        username: 'Bảo_AllIn',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Bao',
+        totalProfit: 54100000,
+        totalWagered: 85000000,
+        highestMultiplier: 45.10,
+        wins: 43,
+        totalGames: 60,
+        rocketProfit: 38100000,
+        rocketWins: 28,
+        comCutProfit: 16000000,
+        comCutWins: 15,
+        comCutBaoWins: 2,
+        rankTier: 'MASTER' as const,
+        rankLevel: 12,
+        rankExp: 1310000,
+        vipTitle: 'Vua Gồng Lãi 💎',
+        badge: '👑 CAO THỦ',
+        isBot: true,
+      },
+      {
+        id: 'bot_diamond_1',
+        username: 'Nam_ĂnNon',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Nam',
+        totalProfit: 46200000,
+        totalWagered: 72000000,
+        highestMultiplier: 1.85,
+        wins: 72,
+        totalGames: 88,
+        rocketProfit: 28000000,
+        rocketWins: 44,
+        comCutProfit: 18200000,
+        comCutWins: 28,
+        comCutBaoWins: 1,
+        rankTier: 'DIAMOND' as const,
+        rankLevel: 11,
+        rankExp: 880000,
+        vipTitle: 'Thần Rút Sớm 🛡️',
+        badge: '💎 KIM CƯƠNG',
+        isBot: true,
+      },
+      {
+        id: 'bot_diamond_2',
+        username: 'Thần_Cơm_Bão_x30',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ComBao',
+        totalProfit: 41800000,
+        totalWagered: 55000000,
+        highestMultiplier: 8.50,
+        wins: 38,
+        totalGames: 52,
+        rocketProfit: 12800000,
+        rocketWins: 14,
+        comCutProfit: 29000000,
+        comCutWins: 24,
+        comCutBaoWins: 8,
+        rankTier: 'DIAMOND' as const,
+        rankLevel: 11,
+        rankExp: 790000,
+        vipTitle: 'Thợ Săn Bão x30 🌪️',
+        badge: '💎 KIM CƯƠNG',
+        isBot: true,
+      },
+      {
+        id: 'bot_diamond_3',
+        username: 'Khang_BịpVcl',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Khang',
+        totalProfit: 35400000,
+        totalWagered: 50000000,
+        highestMultiplier: 32.50,
+        wins: 34,
+        totalGames: 48,
+        rocketProfit: 24400000,
+        rocketWins: 22,
+        comCutProfit: 11000000,
+        comCutWins: 12,
+        comCutBaoWins: 2,
+        rankTier: 'DIAMOND' as const,
+        rankLevel: 11,
+        rankExp: 650000,
+        vipTitle: 'Chiến Thần Tâm Lý 😈',
+        badge: '💎 KIM CƯƠNG',
+        isBot: true,
+      },
+      {
+        id: 'bot_platinum_1',
+        username: 'Phúc_KhôMáu',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=Phuc',
+        totalProfit: 28400000,
+        totalWagered: 45000000,
+        highestMultiplier: 28.50,
+        wins: 29,
+        totalGames: 42,
+        rocketProfit: 19400000,
+        rocketWins: 19,
+        comCutProfit: 9000000,
+        comCutWins: 10,
+        comCutBaoWins: 1,
+        rankTier: 'PLATINUM' as const,
+        rankLevel: 10,
+        rankExp: 480000,
+        vipTitle: 'Sát Thủ Gấp Thếp ⚡',
+        badge: '💠 BẠCH KIM',
+        isBot: true,
+      },
+      {
+        id: 'bot_platinum_2',
+        username: 'Thầy_Bói_RaCầu',
+        avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=ThayBoi',
+        totalProfit: 24600000,
+        totalWagered: 38000000,
+        highestMultiplier: 18.20,
+        wins: 27,
+        totalGames: 40,
+        rocketProfit: 14600000,
+        rocketWins: 16,
+        comCutProfit: 10000000,
+        comCutWins: 11,
+        comCutBaoWins: 3,
+        rankTier: 'PLATINUM' as const,
+        rankLevel: 10,
+        rankExp: 420000,
+        vipTitle: 'Nhà Tiên Tri Vũ Trụ 🔮',
+        badge: '💠 BẠCH KIM',
+        isBot: true,
+      },
     ];
 
-    const realUsers = Object.values(userDatabase).map((u: any) => ({
-      id: u.id,
-      username: u.username || 'Khách',
-      avatar: u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`,
-      totalProfit: u.stats?.totalProfit || 0,
-      highestMultiplier: u.stats?.highestMultiplier || 1.0,
-      wins: u.stats?.wins || 0,
-      vipTitle: u.stats?.vipTitle || 'Phi Công Tập Sự 🧑‍🚀',
-      badge: u.discordUser ? 'DISCORD' : 'VIP',
-    }));
+    const realUsers = Object.values(userDatabase).map((u: any) => {
+      const stats = u.stats || {};
+      const totalWagered = stats.totalWagered || 0;
+      const totalProfit = stats.totalProfit || 0;
+      let exp = stats.rankExp;
+      if (typeof exp !== 'number') {
+        exp = Math.max(1000, Math.floor(totalWagered / 1000) + Math.floor(Math.max(0, totalProfit) / 500));
+        stats.rankExp = exp;
+      }
+      const rankInfo = getTierFromExp(exp);
 
-    const combined = [...realUsers, ...mockBotsLeaderboard].sort((a, b) => b.totalProfit - a.totalProfit);
+      return {
+        id: u.id,
+        username: u.username || 'Khách',
+        avatar: u.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${u.id}`,
+        totalProfit,
+        totalWagered,
+        highestMultiplier: stats.highestMultiplier || 1.0,
+        wins: stats.wins || 0,
+        totalGames: stats.totalGames || 0,
+        rocketProfit: stats.rocketProfit ?? Math.floor(totalProfit * 0.65),
+        rocketWins: stats.rocketWins ?? Math.floor((stats.wins || 0) * 0.6),
+        comCutProfit: stats.comCutProfit ?? Math.floor(totalProfit * 0.35),
+        comCutWins: stats.comCutWins ?? Math.floor((stats.wins || 0) * 0.4),
+        comCutBaoWins: stats.comCutBaoWins || 0,
+        rankTier: rankInfo.tier,
+        rankLevel: rankInfo.level,
+        rankExp: exp,
+        vipTitle: stats.vipTitle || rankInfo.title,
+        badge: u.discordUser ? 'DISCORD' : rankInfo.tier,
+        isBot: false,
+      };
+    });
+
+    const combined = [...realUsers, ...mockUnifiedBotsLeaderboard].sort((a, b) => b.rankExp - a.rankExp);
     res.json(combined);
   });
 
@@ -1197,17 +1876,22 @@ async function startServer() {
 
   // POST /api/user/sync - Sync user account data
   app.post('/api/user/sync', (req, res) => {
-    const { discordId, balance, stats, username, avatar } = req.body;
-    if (!discordId) {
-      return res.status(400).json({ error: 'Missing discordId' });
+    const { discordId, userId, balance, stats, username, avatar } = req.body;
+    const targetId = discordId || userId;
+    if (!targetId) {
+      return res.status(400).json({ error: 'Missing discordId or userId' });
     }
 
-    userDatabase[discordId] = {
-      discordId,
-      username,
-      avatar,
-      balance,
-      stats,
+    userDatabase[targetId] = {
+      ...(userDatabase[targetId] || {}),
+      discordId: targetId,
+      username: username || userDatabase[targetId]?.username || 'Khách',
+      avatar: avatar || userDatabase[targetId]?.avatar || `https://api.dicebear.com/7.x/bottts/svg?seed=${targetId}`,
+      balance: typeof balance === 'number' ? balance : (userDatabase[targetId]?.balance || 500000),
+      stats: {
+        ...(userDatabase[targetId]?.stats || {}),
+        ...(stats || {}),
+      },
       lastSyncedAt: Date.now(),
     };
 
@@ -1217,7 +1901,7 @@ async function startServer() {
       console.error('Failed to write user-database.json:', err);
     }
 
-    res.json({ success: true, saved: userDatabase[discordId] });
+    res.json({ success: true, saved: userDatabase[targetId] });
   });
 
   // Health check endpoint for Cloud Run and load balancers

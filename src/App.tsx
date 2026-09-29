@@ -19,16 +19,17 @@ import { DiscordAccountModal } from './components/DiscordAccountModal';
 import { UserStatsModal } from './components/UserStatsModal';
 import { RulesModal } from './components/RulesModal';
 import { RocketGarageModal } from './components/RocketGarageModal';
-import { LeaderboardModal } from './components/LeaderboardModal';
+import { UnifiedLeaderboardModal } from './components/UnifiedLeaderboardModal';
 import { DuelModal } from './components/DuelModal';
 import { DuelBanner } from './components/DuelBanner';
 import { DuelResultModal } from './components/DuelResultModal';
 import { ComVaCutGame } from './components/ComVaCutGame';
 import { GameHubModal } from './components/GameHubModal';
-import { RocketSkin, RocketSkinId, DuelState, LeaderboardItem } from './types/game';
+import { RocketSkin, RocketSkinId, DuelState, UnifiedLeaderboardItem } from './types/game';
 import { getSkinById } from './utils/skins';
+import { calculateRankFromExp, calcRocketBetExp, calcRocketCashoutExp, calcComCutBetExp, calcComCutWinExp, calcDuelWinExp } from './utils/rankSystem';
 import confetti from 'canvas-confetti';
-import { Volume2, VolumeX, Coins, Menu, X, Sparkles, Trophy, Swords, HelpCircle, ShieldCheck, BarChart2 } from 'lucide-react';
+import { Volume2, VolumeX, Coins, Menu, X, Sparkles, Trophy, Swords, HelpCircle, ShieldCheck, BarChart2, Award } from 'lucide-react';
 
 const INITIAL_BALANCE = 500000;
 
@@ -175,7 +176,7 @@ export default function App() {
 
   const [jackpotPool, setJackpotPool] = useState<number>(18500000);
   const [activeDuel, setActiveDuel] = useState<DuelState | null>(null);
-  const [leaderboardItems, setLeaderboardItems] = useState<LeaderboardItem[]>([]);
+  const [leaderboardItems, setLeaderboardItems] = useState<UnifiedLeaderboardItem[]>([]);
   const [comCutServerState, setComCutServerState] = useState<ComCutGameState | null>(null);
 
   // History & Community
@@ -213,6 +214,7 @@ export default function App() {
   });
 
   const currentUserId = discordUser ? discordUser.id : getGuestUserId();
+  const currentRank = calculateRankFromExp(stats.rankExp || 1000);
 
   // On startup & account change: Fetch fresh account balance, stats and skins from central server
   useEffect(() => {
@@ -477,12 +479,32 @@ export default function App() {
     }
   }, [balance, discordUser]);
 
-  // Persist stats
+  // Persist stats and sync with central backend
   useEffect(() => {
     if (!discordUser) {
       localStorage.setItem('rocket_crash_guest_stats', JSON.stringify(stats));
+    } else {
+      const updatedUser = { ...discordUser, balance, stats };
+      localStorage.setItem('rocket_crash_discord_user', JSON.stringify(updatedUser));
     }
-  }, [stats, discordUser]);
+
+    const timer = setTimeout(() => {
+      fetch('/api/user/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: currentUserId,
+          discordId: discordUser?.id,
+          username: discordUser ? (discordUser.globalName || discordUser.username) : 'Khách',
+          avatar: discordUser ? discordUser.avatar : `https://api.dicebear.com/7.x/bottts/svg?seed=${currentUserId}`,
+          balance,
+          stats,
+        }),
+      }).catch(() => {});
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [stats, discordUser, balance, currentUserId]);
 
   // --- REALTIME GLOBAL SERVER STREAM (SSE) ---
   const currentRoundIdRef = useRef<string>('');
@@ -574,6 +596,9 @@ export default function App() {
                 status: p.status === 'CASHED_OUT' ? 'WON' : p.status === 'CRASHED' ? 'LOST' : 'FLYING',
                 winAmount: p.cashoutMultiplier ? Math.floor(p.betAmount * p.cashoutMultiplier) : undefined,
                 isCurrentUser: p.id === currentUserId,
+                botArchetype: p.botArchetype,
+                badge: p.badge,
+                isWhale: p.isWhale,
               }));
               setPlayers(mappedPlayers);
 
@@ -586,13 +611,24 @@ export default function App() {
                 setUserCashoutMultiplier(finalMult);
                 const winAmount = Math.floor(me.betAmount * finalMult);
                 const netProfit = winAmount - me.betAmount;
-                setStats(prev => ({
-                  ...prev,
-                  totalGames: prev.totalGames + 1,
-                  wins: prev.wins + 1,
-                  totalProfit: prev.totalProfit + netProfit,
-                  highestMultiplier: Math.max(prev.highestMultiplier, finalMult),
-                }));
+                setStats(prev => {
+                  const addedExp = calcRocketCashoutExp(winAmount, finalMult);
+                  const nextExp = (prev.rankExp || 1000) + addedExp;
+                  const rankInfo = calculateRankFromExp(nextExp);
+                  return {
+                    ...prev,
+                    totalGames: prev.totalGames + 1,
+                    rocketGames: (prev.rocketGames || 0) + 1,
+                    wins: prev.wins + 1,
+                    rocketWins: (prev.rocketWins || 0) + 1,
+                    totalProfit: prev.totalProfit + netProfit,
+                    rocketProfit: (prev.rocketProfit || 0) + netProfit,
+                    highestMultiplier: Math.max(prev.highestMultiplier, finalMult),
+                    rankExp: nextExp,
+                    rankLevel: rankInfo.level,
+                    rankTier: rankInfo.tierId,
+                  };
+                });
               }
             }
 
@@ -627,6 +663,17 @@ export default function App() {
                 plannedEventRef.current = null;
                 setActiveEvent(null);
                 activeEventRef.current = null;
+                if ((userBet > 0 && !userCashedOut) || (userBet2 > 0 && !userCashedOut2)) {
+                  const lostAmt = (userCashedOut ? 0 : userBet) + (userCashedOut2 ? 0 : userBet2);
+                  setStats(prev => ({
+                    ...prev,
+                    totalGames: prev.totalGames + 1,
+                    rocketGames: (prev.rocketGames || 0) + 1,
+                    losses: prev.losses + 1,
+                    totalProfit: prev.totalProfit - lostAmt,
+                    rocketProfit: (prev.rocketProfit || 0) - lostAmt,
+                  }));
+                }
               } else if (data.status === 'COUNTDOWN') {
                 sounds.playCountdownBeep(false);
                 plannedEventRef.current = null;
@@ -1054,16 +1101,30 @@ export default function App() {
         opponentMult: activeDuel.opponentTargetMult,
       } : null);
 
+      const oppMult = (activeDuel.opponentTargetMult ?? 2.0).toFixed(2);
+      let oppTaunt = `🤖 Đã chốt tại ${oppMult}x! Bạn có dám gồng cao hơn không? 🔥`;
+      if (activeDuel.opponentDifficulty === 'DỄ') {
+        oppTaunt = `🛡️ Em chốt nhẹ ${oppMult}x thôi nhé, bác vượt qua em là thắng!`;
+      } else if (activeDuel.opponentDifficulty === 'VỪA') {
+        oppTaunt = `⚡ Đã chốt ${oppMult}x! Nhịp này em tính kỹ rồi, bác cẩn thận nổ nhé!`;
+      } else if (activeDuel.opponentDifficulty === 'KHÓ') {
+        oppTaunt = `💎 Gồng tới ${oppMult}x húp trọn! Giờ đến lượt bác thể hiện độ lì!`;
+      } else if (activeDuel.opponentDifficulty === 'CAO THỦ') {
+        oppTaunt = `😈 Bẫy đã sập tại ${oppMult}x! Dám gồng tiếp qua mốc này không con trai?`;
+      } else if (activeDuel.opponentDifficulty === 'ÁC MỘNG') {
+        oppTaunt = `👑 Anh Ba chốt ${oppMult}x! Tiền tấn vào túi, tuổi gì ăn được anh Ba!`;
+      }
+
       setMessages(prev => [
         ...prev.slice(-30),
         {
           id: `bot_duel_${Date.now()}`,
           user: activeDuel.opponentName,
           avatar: activeDuel.opponentAvatar,
-          text: `🤖 Đã chốt cược Solo tại ${(activeDuel.opponentTargetMult ?? 2.0).toFixed(2)}x! Bạn có dám gồng cao hơn không? 🔥`,
+          text: oppTaunt,
           time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          badge: 'SOLO 1V1',
-          isSystem: true,
+          badge: activeDuel.opponentDifficulty ? `BOSS ${activeDuel.opponentDifficulty}` : 'SOLO 1V1',
+          isSystem: false,
         },
       ]);
     }
@@ -1089,6 +1150,18 @@ export default function App() {
         msg = `🏆 BẠN THẮNG SOLO 1V1! (${userM.toFixed(2)}x vs ${oppM.toFixed(2)}x) -> +${winPot.toLocaleString('vi-VN')} Xu!`;
         sounds.playClaimReward();
         confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
+        setStats(prev => {
+          const addedExp = calcDuelWinExp(activeDuel.wager);
+          const nextExp = (prev.rankExp || 1000) + addedExp;
+          const rankInfo = calculateRankFromExp(nextExp);
+          return {
+            ...prev,
+            duelWins: (prev.duelWins || 0) + 1,
+            rankExp: nextExp,
+            rankLevel: rankInfo.level,
+            rankTier: rankInfo.tierId,
+          };
+        });
       } else if (userM < oppM) {
         winnerResult = 'OPPONENT';
         msg = `❌ THẤT BẠI SOLO 1V1! (${userM.toFixed(2)}x vs ${oppM.toFixed(2)}x) -> ${activeDuel.opponentName} húp trọn hũ.`;
@@ -1161,10 +1234,18 @@ export default function App() {
         setBalance(prev => prev - amount);
       }
 
-      setStats(prev => ({
-        ...prev,
-        totalWagered: prev.totalWagered + amount,
-      }));
+      setStats(prev => {
+        const addedExp = calcRocketBetExp(amount);
+        const nextExp = (prev.rankExp || 1000) + addedExp;
+        const rankInfo = calculateRankFromExp(nextExp);
+        return {
+          ...prev,
+          totalWagered: prev.totalWagered + amount,
+          rankExp: nextExp,
+          rankLevel: rankInfo.level,
+          rankTier: rankInfo.tierId,
+        };
+      });
     } catch (err) {
       console.error('Bet API error:', err);
     }
@@ -1205,10 +1286,18 @@ export default function App() {
       } else {
         setBalance(prev => prev - amount);
       }
-      setStats(prev => ({
-        ...prev,
-        totalWagered: prev.totalWagered + amount,
-      }));
+      setStats(prev => {
+        const addedExp = calcRocketBetExp(amount);
+        const nextExp = (prev.rankExp || 1000) + addedExp;
+        const rankInfo = calculateRankFromExp(nextExp);
+        return {
+          ...prev,
+          totalWagered: prev.totalWagered + amount,
+          rankExp: nextExp,
+          rankLevel: rankInfo.level,
+          rankTier: rankInfo.tierId,
+        };
+      });
     } catch (err) {
       console.error('Bet2 API error:', err);
     }
@@ -1246,13 +1335,24 @@ export default function App() {
     setBalance(prev => prev + winAmount);
 
     const netProfit = winAmount - userBet;
-    setStats(prev => ({
-      ...prev,
-      totalGames: prev.totalGames + 1,
-      wins: prev.wins + 1,
-      totalProfit: prev.totalProfit + netProfit,
-      highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
-    }));
+    setStats(prev => {
+      const addedExp = calcRocketCashoutExp(winAmount, cashoutMult);
+      const nextExp = (prev.rankExp || 1000) + addedExp;
+      const rankInfo = calculateRankFromExp(nextExp);
+      return {
+        ...prev,
+        totalGames: prev.totalGames + 1,
+        rocketGames: (prev.rocketGames || 0) + 1,
+        wins: prev.wins + 1,
+        rocketWins: (prev.rocketWins || 0) + 1,
+        totalProfit: prev.totalProfit + netProfit,
+        rocketProfit: (prev.rocketProfit || 0) + netProfit,
+        highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
+        rankExp: nextExp,
+        rankLevel: rankInfo.level,
+        rankTier: rankInfo.tierId,
+      };
+    });
 
     // Post to chat
     const stage = getAltitudeStage(cashoutMult);
@@ -1309,13 +1409,24 @@ export default function App() {
     setBalance(prev => prev + winAmt);
 
     const netProfit = winAmt - userBet2;
-    setStats(prev => ({
-      ...prev,
-      totalGames: prev.totalGames + 1,
-      wins: prev.wins + 1,
-      totalProfit: prev.totalProfit + netProfit,
-      highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
-    }));
+    setStats(prev => {
+      const addedExp = calcRocketCashoutExp(winAmt, cashoutMult);
+      const nextExp = (prev.rankExp || 1000) + addedExp;
+      const rankInfo = calculateRankFromExp(nextExp);
+      return {
+        ...prev,
+        totalGames: prev.totalGames + 1,
+        rocketGames: (prev.rocketGames || 0) + 1,
+        wins: prev.wins + 1,
+        rocketWins: (prev.rocketWins || 0) + 1,
+        totalProfit: prev.totalProfit + netProfit,
+        rocketProfit: (prev.rocketProfit || 0) + netProfit,
+        highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
+        rankExp: nextExp,
+        rankLevel: rankInfo.level,
+        rankTier: rankInfo.tierId,
+      };
+    });
 
     const stage = getAltitudeStage(cashoutMult);
     const userDisplayName = discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn';
@@ -1370,23 +1481,42 @@ export default function App() {
     }
   };
 
-  // Start 1v1 Duel Challenge
-  const handleStartDuel = async (wager: number, opponentName: string, opponentAvatar: string) => {
+  // Start 1v1 Duel Challenge with Upgraded AI Boss Opponents
+  const handleStartDuel = async (
+    wager: number,
+    opponentName: string,
+    opponentAvatar: string,
+    opponentTitle?: string,
+    opponentDifficulty?: 'DỄ' | 'VỪA' | 'KHÓ' | 'CAO THỦ' | 'ÁC MỘNG',
+    opponentQuote?: string,
+    minTarget?: number,
+    maxTarget?: number
+  ) => {
     if (balance < wager) {
       sounds.playErrorBeep();
-      alert('Số dư Xu không đủ để tham gia Thách Đấu!');
       return;
     }
 
     setShowDuelModal(false);
     setShowDuelResultModal(false);
 
-    const target = parseFloat((1.30 + Math.random() * 3.5).toFixed(2));
+    let minT = minTarget || 1.8;
+    let maxT = maxTarget || 4.5;
+    if (opponentDifficulty === 'DỄ') { minT = 1.4; maxT = 1.95; }
+    else if (opponentDifficulty === 'VỪA') { minT = 2.2; maxT = 3.8; }
+    else if (opponentDifficulty === 'KHÓ') { minT = 3.8; maxT = 8.0; }
+    else if (opponentDifficulty === 'CAO THỦ') { minT = 2.5; maxT = 9.5; }
+    else if (opponentDifficulty === 'ÁC MỘNG') { minT = 4.5; maxT = 14.0; }
+
+    const target = parseFloat((minT + Math.random() * (maxT - minT)).toFixed(2));
 
     const newDuel: DuelState = {
       active: true,
       opponentName,
       opponentAvatar,
+      opponentTitle,
+      opponentDifficulty,
+      opponentQuote,
       wager,
       status: phase === 'COUNTDOWN' ? 'PLAYING' : 'WAITING',
       opponentTargetMult: target,
@@ -1403,12 +1533,14 @@ export default function App() {
       ...prev.slice(-30),
       {
         id: `duel_${Date.now()}`,
-        user: 'Hệ Thống',
+        user: opponentName,
         avatar: opponentAvatar,
-        text: `⚔️ BẠN ĐÃ THÁCH ĐẤU SOLO 1V1: Đã đặt cược ${wager.toLocaleString('vi-VN')} Xu vs ${opponentName}! Hãy gồng cược để áp đảo đối thủ! 🔥`,
+        text: opponentQuote
+          ? `⚔️ "${opponentQuote}" 🔥`
+          : `⚔️ Đã nhận lời thách đấu ${wager.toLocaleString('vi-VN')} Xu! Hãy xem ai gồng lì hơn!`,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        badge: 'SOLO 1V1',
-        isSystem: true,
+        badge: opponentDifficulty ? `BOSS ${opponentDifficulty}` : 'SOLO 1V1',
+        isSystem: false,
       },
     ]);
   };
@@ -1523,6 +1655,66 @@ export default function App() {
       console.error('Failed to sync mini-game balance to server:', err);
     }
   }, [currentUserId, discordUser]);
+
+  // Track EXP and wager when betting in Cơm & Cứt
+  const handleComCutBet = useCallback((amount: number) => {
+    if (amount <= 0) return;
+    setStats(prev => {
+      const addedExp = calcComCutBetExp(amount);
+      const nextExp = (prev.rankExp || 1000) + addedExp;
+      const rankInfo = calculateRankFromExp(nextExp);
+      return {
+        ...prev,
+        totalWagered: prev.totalWagered + amount,
+        rankExp: nextExp,
+        rankLevel: rankInfo.level,
+        rankTier: rankInfo.tierId,
+      };
+    });
+  }, []);
+
+  // Track results, wins, losses, profit and massive EXP when Cơm & Cứt round finishes
+  const handleComCutRoundFinish = useCallback((data: { betTotal: number; winTotal: number; isBao: boolean }) => {
+    const { betTotal, winTotal, isBao } = data;
+    const isWin = winTotal > 0;
+    const netProfit = winTotal - betTotal;
+
+    setStats(prev => {
+      const addedExp = isWin ? calcComCutWinExp(winTotal, isBao) : 0;
+      const nextExp = (prev.rankExp || 1000) + addedExp;
+      const rankInfo = calculateRankFromExp(nextExp);
+
+      return {
+        ...prev,
+        totalGames: prev.totalGames + 1,
+        comCutGames: (prev.comCutGames || 0) + 1,
+        wins: isWin ? prev.wins + 1 : prev.wins,
+        losses: isWin ? prev.losses : prev.losses + 1,
+        comCutWins: isWin ? (prev.comCutWins || 0) + 1 : (prev.comCutWins || 0),
+        comCutBaoWins: (isWin && isBao) ? (prev.comCutBaoWins || 0) + 1 : (prev.comCutBaoWins || 0),
+        totalProfit: prev.totalProfit + netProfit,
+        comCutProfit: (prev.comCutProfit || 0) + netProfit,
+        rankExp: nextExp,
+        rankLevel: rankInfo.level,
+        rankTier: rankInfo.tierId,
+      };
+    });
+  }, []);
+
+  // Direct EXP awarding from Solo modes or events
+  const handleAwardExp = useCallback((expGain: number) => {
+    if (!expGain || expGain <= 0) return;
+    setStats(prev => {
+      const nextExp = (prev.rankExp || 1000) + expGain;
+      const rankInfo = calculateRankFromExp(nextExp);
+      return {
+        ...prev,
+        rankExp: nextExp,
+        rankLevel: rankInfo.level,
+        rankTier: rankInfo.tierId,
+      };
+    });
+  }, []);
 
   // Toggle Sound
   const toggleSound = () => {
@@ -1653,13 +1845,6 @@ export default function App() {
                   <span>Kho Tên Lửa</span>
                 </button>
                 <button
-                  onClick={() => setShowLeaderboardModal(true)}
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-400 transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>🏆</span>
-                  <span>Bảng Xếp Hạng</span>
-                </button>
-                <button
                   onClick={() => setShowDuelModal(true)}
                   className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-purple-500/50 hover:text-purple-300 transition-all flex items-center gap-1.5 cursor-pointer"
                 >
@@ -1668,6 +1853,13 @@ export default function App() {
                 </button>
               </>
             )}
+            <button
+              onClick={handleOpenLeaderboards}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-amber-500/50 hover:text-amber-400 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <Trophy className="w-3.5 h-3.5 text-amber-400" />
+              <span>Bảng Xếp Hạng & Rank</span>
+            </button>
             <button
               onClick={() => setShowRulesModal(true)}
               className="hover:text-amber-400 transition-colors whitespace-nowrap px-1"
@@ -1689,6 +1881,18 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            {/* User Rank Tier Badge */}
+            <button
+              type="button"
+              onClick={handleOpenLeaderboards}
+              className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl border text-[11px] font-black transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95 shrink-0 ${currentRank.badgeBg} ${currentRank.border}`}
+              title="Cấp bậc của bạn - Bấm xem Bảng Xếp Hạng & Quyền Lợi Cấp Bậc"
+            >
+              <span className="text-xs sm:text-sm">{currentRank.icon}</span>
+              <span className="hidden xs:inline">{currentRank.tierName} {currentRank.division}</span>
+              <span className="text-[10px] px-1 py-0.2 bg-black/40 rounded font-mono">Lv.{currentRank.level}</span>
+            </button>
+
             {/* User Balance Capsule + Quick Faucet */}
             <div className="flex items-center gap-0.5 sm:gap-1 bg-slate-900/90 border border-slate-800 rounded-xl p-0.5 sm:p-1 shadow-inner shrink-0">
               <div className="flex items-center gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1">
@@ -1802,13 +2006,13 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => { setShowMobileMenu(false); setShowLeaderboardModal(true); }}
-                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-indigo-500/50 text-slate-200 cursor-pointer"
+                onClick={() => { setShowMobileMenu(false); handleOpenLeaderboards(); }}
+                className="flex items-center gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-500/50 text-slate-200 cursor-pointer"
               >
-                <Trophy className="w-4 h-4 text-indigo-400" />
+                <Trophy className="w-4 h-4 text-amber-400" />
                 <div className="flex flex-col text-left">
-                  <span>Bảng Xếp Hạng</span>
-                  <span className="text-[10px] text-indigo-400 font-semibold">Top Phi Công</span>
+                  <span>Bảng Xếp Hạng & Rank</span>
+                  <span className="text-[10px] text-amber-400 font-semibold">{currentRank.icon} {currentRank.tierName} {currentRank.division}</span>
                 </div>
               </button>
 
@@ -1872,7 +2076,7 @@ export default function App() {
 
         {/* Core Game Arena Layout */}
         {activeGame === 'COM_CUT' ? (
-          <div className="w-full flex flex-col gap-6">
+          <div className="w-full flex flex-col gap-3 sm:gap-6">
             <ComVaCutGame
               balance={balance}
               onUpdateBalance={handleDirectBalanceUpdate}
@@ -1885,6 +2089,11 @@ export default function App() {
                 setActiveGame(selectedGame);
                 localStorage.setItem('rocket_crash_active_game', selectedGame);
               }}
+              onOpenLeaderboard={handleOpenLeaderboards}
+              onComCutBet={handleComCutBet}
+              onComCutRoundFinish={handleComCutRoundFinish}
+              onAwardExp={handleAwardExp}
+              userRankInfo={currentRank}
               serverGameState={comCutServerState}
               currentUserId={currentUserId}
             />
@@ -1905,7 +2114,14 @@ export default function App() {
                   phase={phase}
                   userCashedOut={userCashedOut || userCashedOut2}
                   userCashoutMultiplier={userCashoutMultiplier || userCashoutMultiplier2}
-                  onRematch={() => handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar)}
+                  onRematch={() => handleStartDuel(
+                    activeDuel.wager,
+                    activeDuel.opponentName,
+                    activeDuel.opponentAvatar,
+                    activeDuel.opponentTitle,
+                    activeDuel.opponentDifficulty,
+                    activeDuel.opponentQuote
+                  )}
                   onClose={() => setActiveDuel(null)}
                 />
               )}
@@ -1994,10 +2210,14 @@ export default function App() {
         onBuySkin={handleBuySkin}
       />
 
-      <LeaderboardModal
+      <UnifiedLeaderboardModal
         isOpen={showLeaderboardModal}
         onClose={() => setShowLeaderboardModal(false)}
         items={leaderboardItems}
+        currentUserExp={stats.rankExp || 1000}
+        currentUserId={currentUserId}
+        currentUserName={discordUser ? (discordUser.globalName || discordUser.username) : 'Bạn'}
+        currentUserAvatar={discordUser ? discordUser.avatar : undefined}
       />
 
       <DuelModal
@@ -2015,7 +2235,14 @@ export default function App() {
         onClose={() => setShowDuelResultModal(false)}
         onRematch={() => {
           if (activeDuel) {
-            handleStartDuel(activeDuel.wager, activeDuel.opponentName, activeDuel.opponentAvatar);
+            handleStartDuel(
+              activeDuel.wager,
+              activeDuel.opponentName,
+              activeDuel.opponentAvatar,
+              activeDuel.opponentTitle,
+              activeDuel.opponentDifficulty,
+              activeDuel.opponentQuote
+            );
           }
         }}
         onChangeOpponent={() => {

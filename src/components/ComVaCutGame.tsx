@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock, Menu, Wifi } from 'lucide-react';
+import { Coins, Sparkles, RefreshCw, History, Info, Hand, Volume2, VolumeX, Maximize2, Minimize2, PlusCircle, RotateCw, MessageSquare, Send, X, Lock, Menu, Wifi, Trophy, Swords, Shield, Flame, Award, Gift, Zap } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { sounds } from '../utils/audio';
 import { Real3DDice } from './Real3DDice';
-import { ChatMessage, ComCutGameState, ComCutPhase, ComCutBetType, ComCutHistoryItem, ComCutBotBet } from '../types/game';
+import { ChatMessage, ComCutGameState, ComCutPhase, ComCutBetType, ComCutHistoryItem, ComCutBotBet, ComCutActiveEvent, ComCutEventType } from '../types/game';
+import { COMCUT_EVENTS_CONFIG } from '../utils/comCutBosses';
 import { GameHubModal } from './GameHubModal';
+import { ComCutDuelModal } from './ComCutDuelModal';
 
 export type { ComCutBetType, ComCutHistoryItem, ComCutBotBet };
 
@@ -19,6 +21,18 @@ interface ComVaCutGameProps {
   onSwitchGame?: (game: 'ROCKET' | 'COM_CUT') => void;
   serverGameState?: ComCutGameState | null;
   currentUserId?: string;
+  onOpenLeaderboard?: () => void;
+  onComCutBet?: (amount: number) => void;
+  onComCutRoundFinish?: (data: { betTotal: number; winTotal: number; isBao: boolean }) => void;
+  onAwardExp?: (exp: number) => void;
+  userRankInfo?: {
+    icon: string;
+    tierName: string;
+    division: string;
+    level: number;
+    badgeBg: string;
+    border: string;
+  };
 }
 
 const comCutSyncChannel = typeof window !== 'undefined' && 'BroadcastChannel' in window
@@ -53,9 +67,22 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
   onSwitchGame,
   serverGameState,
   currentUserId,
+  onOpenLeaderboard,
+  onComCutBet,
+  onComCutRoundFinish,
+  onAwardExp,
+  userRankInfo,
 }) => {
   // Game Hub Switcher Modal State
   const [showGameHub, setShowGameHub] = useState<boolean>(false);
+
+  // Solo 1v1 Bát Vàng Modal State
+  const [showSoloDuelModal, setShowSoloDuelModal] = useState<boolean>(false);
+
+  // Dynamic In-Game Events State
+  const [currentEvent, setCurrentEvent] = useState<ComCutActiveEvent | null>(null);
+  const currentEventRef = useRef<ComCutActiveEvent | null>(null);
+  useEffect(() => { currentEventRef.current = currentEvent; }, [currentEvent]);
 
   // Mini Floating Chat State (Available in both Landscape & Portrait)
   const [showMiniChat, setShowMiniChat] = useState<boolean>(false);
@@ -207,7 +234,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
   const isPhysicalLandscape = !isPortrait;
   const isVirtualLandscape = isLandscapeMode && isPortrait;
-  const isLandscapeActive = isLandscapeMode || (isPhysicalLandscape && windowDimensions.width > 700);
+  const isLandscapeActive = isLandscapeMode || isPhysicalLandscape;
 
   const toggleLandscape = async () => {
     sounds.playClick();
@@ -260,6 +287,8 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       { id: '4', roundNumber: 1387, dices: [6, 4, 5], total: 15, result: 'COM', isBao: false, time: '14:23' },
     ];
   });
+  const historyRef = useRef<ComCutHistoryItem[]>(history);
+  useEffect(() => { historyRef.current = history; }, [history]);
 
   const [showHistoryModal, setShowHistoryModal] = useState<boolean>(false);
   const [showRulesModal, setShowRulesModal] = useState<boolean>(false);
@@ -324,6 +353,80 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     };
   }, []);
 
+  // Trigger dynamic in-game events on round change
+  useEffect(() => {
+    // 50% chance each round to activate a special event
+    if (Math.random() < 0.5) {
+      const evConfig = COMCUT_EVENTS_CONFIG[Math.floor(Math.random() * COMCUT_EVENTS_CONFIG.length)];
+      const newEv: ComCutActiveEvent = {
+        id: `ev_${roundNumber}_${Date.now()}`,
+        type: evConfig.type,
+        title: evConfig.title,
+        description: evConfig.description,
+        icon: evConfig.icon,
+        badge: evConfig.badge,
+        color: evConfig.color,
+        bgGradient: evConfig.bgGradient,
+        multiplierBoost: evConfig.multiplierBoost,
+        rewardClaimed: false,
+        envelopePos: {
+          x: Math.floor(Math.random() * 50) + 25,
+          y: Math.floor(Math.random() * 30) + 30,
+        },
+      };
+      setCurrentEvent(newEv);
+    } else {
+      setCurrentEvent(null);
+    }
+  }, [roundNumber]);
+
+  // Claim Red Envelope Lucky Airdrop
+  const handleClaimRedEnvelope = () => {
+    if (!currentEvent || currentEvent.type !== 'RED_ENVELOPE' || currentEvent.rewardClaimed) return;
+    sounds.playClaimReward();
+    const luckyAmt = (Math.floor(Math.random() * 15) + 5) * 10000; // 50.000 to 200.000 Xu
+    onUpdateBalance(balance + luckyAmt);
+    setCurrentEvent(prev => prev ? { ...prev, rewardClaimed: true, rewardAmount: luckyAmt } : null);
+    setScoreNotification({
+      text: `🧧 +${luckyAmt.toLocaleString('vi-VN')} Xu Lì Xì Đại Gia!`,
+      positive: true,
+    });
+    setTimeout(() => setScoreNotification(null), 3500);
+    confetti({ particleCount: 80, spread: 80, origin: { y: 0.5 } });
+  };
+
+  // Spin Lucky Wheel Event
+  const handleSpinLuckyWheel = () => {
+    if (!currentEvent || currentEvent.type !== 'MYSTERY_LUCKY_WHEEL' || currentEvent.rewardClaimed) return;
+    sounds.playClaimReward();
+    const wheelPrizes = [50000, 100000, 150000, 200000, 300000, 500000];
+    const luckyAmt = wheelPrizes[Math.floor(Math.random() * wheelPrizes.length)];
+    onUpdateBalance(balance + luckyAmt);
+    setCurrentEvent(prev => prev ? { ...prev, rewardClaimed: true, rewardAmount: luckyAmt } : null);
+    setScoreNotification({
+      text: `🎡 +${luckyAmt.toLocaleString('vi-VN')} Xu Vòng Quay Bát Quái!`,
+      positive: true,
+    });
+    setTimeout(() => setScoreNotification(null), 3500);
+    confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 } });
+  };
+
+  // Claim God of Wealth Blessing Event
+  const handleClaimGodOfWealth = () => {
+    if (!currentEvent || currentEvent.type !== 'GOD_OF_WEALTH_BLESSING' || currentEvent.rewardClaimed) return;
+    sounds.playClaimReward();
+    const luckyAmt = 88888;
+    onUpdateBalance(balance + luckyAmt);
+    onAwardExp?.(500);
+    setCurrentEvent(prev => prev ? { ...prev, rewardClaimed: true, rewardAmount: luckyAmt } : null);
+    setScoreNotification({
+      text: `👑 +88.888 Xu & +500 EXP Lộc Thần Tài Giáng Lâm!`,
+      positive: true,
+    });
+    setTimeout(() => setScoreNotification(null), 3500);
+    confetti({ particleCount: 100, spread: 90, origin: { y: 0.5 } });
+  };
+
   // Sync with Server Authoritative State
   const prevPhaseRef = useRef<ComCutPhase>('BETTING');
   const prevRoundRef = useRef<number>(roundNumber);
@@ -353,42 +456,106 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }
 
     const currentBets = userBetsRef.current;
+    const betTotal = (currentBets.COM || 0) + (currentBets.CUT || 0) + (currentBets.BAO_COM || 0) + (currentBets.BAO_CUT || 0) + (currentBets.COM_GA || 0) + (currentBets.CUT_RUOI || 0);
+
+    const activeEv = currentEventRef.current;
+    const isBaoStorm = activeEv?.type === 'GOLDEN_STORM';
+    const isChickenFeast = activeEv?.type === 'CHICKEN_FEAST';
+    const isFrenzy = activeEv?.type === 'LUCKY_FRENZY';
+    const isGoldenPoop = activeEv?.type === 'GOLDEN_POOP';
+    const isShield = activeEv?.type === 'FORTUNE_SHIELD';
+    const isDoubleCom = activeEv?.type === 'DOUBLE_COM_RAIN';
+    const isPoopReversal = activeEv?.type === 'POOP_REVERSAL';
+    const isMeteorJackpot = activeEv?.type === 'METEOR_JACKPOT';
+    const isGodOfWealth = activeEv?.type === 'GOD_OF_WEALTH_BLESSING';
+
+    const comMult = isDoubleCom ? 2.50 : isFrenzy ? 2.1 : 1.98;
+    const cutMult = isFrenzy ? 2.1 : 1.98;
+    const baoMult = isBaoStorm ? 35 : 30;
+    const gaMult = isChickenFeast ? 10 : 8;
+
     let winTotal = 0;
-    if (isCom && currentBets.COM > 0) winTotal += currentBets.COM * 1.98;
-    if (isCut && currentBets.CUT > 0) winTotal += currentBets.CUT * 1.98;
-    if (isBaoCom && currentBets.BAO_COM > 0) winTotal += currentBets.BAO_COM * 30;
-    if (isBaoCut && currentBets.BAO_CUT > 0) winTotal += currentBets.BAO_CUT * 30;
-    if ((total === 13 || total === 14) && currentBets.COM_GA > 0) winTotal += currentBets.COM_GA * 8;
+    if (isCom && currentBets.COM > 0) winTotal += currentBets.COM * comMult;
+    if (isCut && currentBets.CUT > 0) winTotal += currentBets.CUT * cutMult;
+    if (isBaoCom && currentBets.BAO_COM > 0) winTotal += currentBets.BAO_COM * baoMult;
+    if (isBaoCut && currentBets.BAO_CUT > 0) winTotal += currentBets.BAO_CUT * baoMult;
+    if ((total === 13 || total === 14) && currentBets.COM_GA > 0) winTotal += currentBets.COM_GA * gaMult;
     if ((total === 7 || total === 8) && currentBets.CUT_RUOI > 0) winTotal += currentBets.CUT_RUOI * 8;
 
-    if (winTotal > 0) {
-      const finalWon = Math.floor(winTotal);
-      setLastWinAmount(finalWon);
+    // Bonus for Golden Poop event if outcome is CUT
+    if (isGoldenPoop && isCut && (currentBets.CUT > 0 || currentBets.BAO_CUT > 0)) {
+      winTotal += 100000;
+    }
 
-      // Deduplication with localStorage to ensure exactly 1 tab credits the balance
-      const payoutKey = `comcut_payout_awarded_${s.roundNumber}`;
-      const alreadyAwarded = localStorage.getItem(payoutKey);
-      if (!alreadyAwarded) {
-        localStorage.setItem(payoutKey, 'true');
+    // Meteor Jackpot bonus for Bao or Com Ga winners
+    if (isMeteorJackpot && ((isBaoCom || isBaoCut) || (total === 13 || total === 14)) && winTotal > 0) {
+      winTotal += 500000;
+    }
+
+    // Poop Reversal: If outcome flipped from previous round, add +30% to winning payout!
+    const lastResult = historyRef.current?.[0]?.result;
+    if (isPoopReversal && lastResult && lastResult !== outcome && winTotal > 0) {
+      winTotal += Math.floor(winTotal * 0.3);
+    }
+
+    // God of Wealth blessing: +10% bonus payout
+    if (isGodOfWealth && winTotal > 0) {
+      winTotal += Math.floor(winTotal * 0.1);
+    }
+
+    // Fortune Shield 50% refund if lost
+    let shieldRefund = 0;
+    if (isShield && winTotal === 0 && betTotal > 0) {
+      shieldRefund = Math.floor(betTotal * 0.5);
+    }
+
+    const payoutKey = `comcut_payout_awarded_${s.roundNumber}`;
+    const alreadyAwarded = localStorage.getItem(payoutKey);
+    if (!alreadyAwarded) {
+      localStorage.setItem(payoutKey, 'true');
+
+      if (betTotal > 0) {
+        onComCutRoundFinish?.({
+          betTotal,
+          winTotal: Math.floor(winTotal + shieldRefund),
+          isBao: isBaoCom || isBaoCut,
+        });
+        if (isGodOfWealth) {
+          onAwardExp?.(300);
+        }
+      }
+
+      if (winTotal > 0) {
+        const finalWon = Math.floor(winTotal);
+        setLastWinAmount(finalWon);
         const nextBal = balanceRef.current + finalWon;
         onUpdateBalance(nextBal);
         sounds.playWin();
+
+        setScoreNotification({
+          text: `+${finalWon.toLocaleString('vi-VN')} Xu${isBaoStorm ? ' (BÃO VÀNG x35!)' : isChickenFeast ? ' (CƠM GÀ x10!)' : ''}`,
+          positive: true,
+        });
+        setTimeout(() => setScoreNotification(null), 3500);
+
+        confetti({
+          particleCount: 120,
+          spread: 90,
+          origin: { y: 0.65 },
+          colors: ['#fbbf24', '#f59e0b', '#10b981', '#ffffff']
+        });
+      } else if (shieldRefund > 0) {
+        const nextBal = balanceRef.current + shieldRefund;
+        onUpdateBalance(nextBal);
+        sounds.playClaimReward();
+        setScoreNotification({
+          text: `🛡️ Khiên Thần Tài: Hoàn +${shieldRefund.toLocaleString('vi-VN')} Xu (50%)!`,
+          positive: true,
+        });
+        setTimeout(() => setScoreNotification(null), 3500);
       }
-
-      setScoreNotification({
-        text: `+${finalWon.toLocaleString('vi-VN')} Xu`,
-        positive: true,
-      });
-      setTimeout(() => setScoreNotification(null), 3500);
-
-      confetti({
-        particleCount: 120,
-        spread: 90,
-        origin: { y: 0.65 },
-        colors: ['#fbbf24', '#f59e0b', '#10b981', '#ffffff']
-      });
     }
-  }, [onUpdateBalance]);
+  }, [onUpdateBalance, onComCutRoundFinish]);
 
   useEffect(() => {
     if (!effectiveServerState) return;
@@ -559,6 +726,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
     const nextBal = balance - selectedChip;
     onUpdateBalance(nextBal);
+    onComCutBet?.(selectedChip);
 
     const updatedBets = {
       ...userBets,
@@ -596,6 +764,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }
     const nextBal = balance - currentTotal;
     onUpdateBalance(nextBal);
+    onComCutBet?.(currentTotal);
     const doubled = { ...userBets };
     (Object.keys(doubled) as ComCutBetType[]).forEach((k) => {
       doubled[k] = doubled[k] * 2;
@@ -622,6 +791,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
     }
     const nextBal = balance - previousTotal;
     onUpdateBalance(nextBal);
+    onComCutBet?.(previousTotal);
     const reBets = { ...lastRoundBets };
     setUserBets(reBets);
     syncUserBetsAcrossTabs(reBets, nextBal);
@@ -698,22 +868,35 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             }
           : undefined
       }
-      className={`w-full flex flex-col gap-2 max-w-6xl mx-auto pb-4 select-none transition-all ${
+      className={`w-full flex flex-col max-w-6xl mx-auto select-none transition-all ${
         isLandscapeActive
           ? isVirtualLandscape
-            ? 'bg-[#070a13] p-1.5 xs:p-2 flex flex-col justify-between overflow-hidden'
-            : isLandscapeMode
-            ? 'fixed inset-0 z-[9999] bg-[#070a13] p-1.5 sm:p-2.5 flex flex-col justify-between overflow-hidden h-screen'
-            : 'p-1.5 sm:p-2.5 flex flex-col justify-between'
-          : ''
+            ? 'bg-[#070a13] p-1 sm:p-1.5 flex flex-col justify-between overflow-y-auto max-h-screen gap-1'
+            : isLandscapeMode || (isPhysicalLandscape && windowDimensions.height < 600)
+            ? 'fixed inset-0 z-[9999] bg-[#070a13] p-1 sm:p-2 flex flex-col justify-between overflow-y-auto max-h-[100dvh] h-[100dvh] gap-1'
+            : 'p-1.5 sm:p-2.5 flex flex-col justify-between gap-1.5'
+          : 'gap-2 pb-4'
       }`}
     >
 
       {/* Top Banner: Game Name, Round, Wallet Balance with Quick Add */}
-      <div className={`flex flex-wrap items-center justify-between gap-1.5 bg-gradient-to-r from-amber-950/80 via-slate-900/95 to-yellow-950/80 border border-amber-500/40 rounded-xl sm:rounded-2xl shadow-xl backdrop-blur-md shrink-0 ${
-        isLandscapeActive ? 'p-1 px-2.5' : 'p-2 sm:p-2.5 px-3 sm:px-4'
+      <div className={`items-center justify-between gap-1 sm:gap-1.5 bg-gradient-to-r from-amber-950/80 via-slate-900/95 to-yellow-950/80 border border-amber-500/40 rounded-xl sm:rounded-2xl shadow-xl backdrop-blur-md shrink-0 overflow-x-auto scrollbar-none ${
+        isLandscapeActive ? 'flex flex-nowrap py-1 px-2' : 'flex flex-wrap p-2 sm:p-2.5 px-3 sm:px-4'
       }`}>
-        <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+          {/* NÚT THOÁT NGANG DUY NHẤT BÊN TRÁI */}
+          {isLandscapeActive && (
+            <button
+              type="button"
+              onClick={toggleLandscape}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-red-600 hover:bg-red-500 border border-white text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
+              title="Quay lại màn hình dọc"
+            >
+              <RotateCw className="w-3.5 h-3.5" />
+              <span>THOÁT NGANG</span>
+            </button>
+          )}
+
           {/* NÚT 3 GẠCH ☰ ĐỔI GAME */}
           <button
             type="button"
@@ -722,19 +905,66 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               if (onOpenGameHub) onOpenGameHub();
               else setShowGameHub(true);
             }}
-            className="flex items-center gap-1.5 px-2 sm:px-2.5 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-amber-500/50 hover:border-amber-400 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
             title="Nhấn để đổi game khác (Game Hub)"
           >
             <Menu className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-[11px] sm:text-xs text-amber-300">Đổi Game</span>
           </button>
 
+          {/* NÚT BẢNG XẾP HẠNG & RANK CHUNG */}
+          {onOpenLeaderboard && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playClick();
+                onOpenLeaderboard();
+              }}
+              className="flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-900 hover:bg-slate-800 border border-yellow-500/50 hover:border-yellow-400 text-yellow-300 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
+              title="Mở Bảng Xếp Hạng & Hệ Thống Rank Cả 2 Game"
+            >
+              <Trophy className="w-3.5 h-3.5 text-yellow-400" />
+              <span className="text-[11px] sm:text-xs">{isLandscapeActive ? 'BXH' : 'Bảng Xếp Hạng'}</span>
+            </button>
+          )}
+
+          {/* NÚT CHẾ ĐỘ SOLO 1V1 (NGƯỜI THẬT & BOSS) */}
+          <button
+            type="button"
+            onClick={() => {
+              sounds.playClick();
+              setShowSoloDuelModal(true);
+            }}
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white font-black text-xs shadow-lg transition-all active:scale-95 cursor-pointer shrink-0 border border-red-400/80"
+            title="Mở Chế Độ Solo 1v1 (Đấu Người Chơi Thật, Đấu Boss, Chuỗi Sinh Tồn, Leo Tháp)"
+          >
+            <Swords className="w-3.5 h-3.5 text-yellow-300" />
+            <span className="text-[11px] sm:text-xs">Solo 1v1 🔥</span>
+          </button>
+
+          {/* User Rank Pill in ComVaCut Header */}
+          {userRankInfo && (
+            <button
+              type="button"
+              onClick={() => {
+                sounds.playClick();
+                onOpenLeaderboard?.();
+              }}
+              className={`hidden md:flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-black cursor-pointer hover:scale-105 active:scale-95 transition-all ${userRankInfo.badgeBg} ${userRankInfo.border} shrink-0`}
+              title="Cấp bậc của bạn - Bấm để xem Bảng Xếp Hạng & EXP"
+            >
+              <span>{userRankInfo.icon}</span>
+              <span>{userRankInfo.tierName} {userRankInfo.division}</span>
+              <span className="text-[9px] px-1 bg-black/40 rounded font-mono">Lv.{userRankInfo.level}</span>
+            </button>
+          )}
+
           <div className={`${isLandscapeActive ? 'w-6 h-6 text-sm' : 'w-8 h-8 sm:w-9 sm:h-9 text-lg'} rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-400 p-0.5 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black shrink-0`}>
             🍚
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <h2 className={`${isLandscapeActive ? 'text-xs' : 'text-xs sm:text-sm'} font-black text-white tracking-wide uppercase flex items-center gap-1`}>
+              <h2 className={`${isLandscapeActive ? 'text-xs' : 'text-xs sm:text-sm'} font-black text-white tracking-wide uppercase flex items-center gap-1 whitespace-nowrap`}>
                 <span className="text-amber-400">CƠM</span> HAY <span className="text-amber-600">CỨT</span> 💩
               </h2>
               <span className="text-[9px] bg-red-500 text-white font-black px-1.5 py-0.2 rounded-full uppercase animate-pulse">
@@ -747,7 +977,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
         {/* In Landscape: Mini History Bead Strip inline */}
         {isLandscapeActive && (
-          <div className="flex items-center gap-1 bg-black/50 px-2 py-0.5 rounded-full border border-amber-500/20">
+          <div className="flex items-center gap-1 bg-black/50 px-2 py-0.5 rounded-full border border-amber-500/20 shrink-0">
             <span className="text-[9px] text-amber-400 font-bold mr-0.5">Cầu:</span>
             {history.slice(0, 8).map((h, i) => (
               <span key={i} className="text-xs" title={`#${h.roundNumber}: ${h.total}đ`}>
@@ -757,40 +987,27 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           </div>
         )}
 
-        {/* Live User Wallet Balance Display */}
-        <div className={`flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 rounded-xl shadow-inner ${
-          isLandscapeActive ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 sm:px-3 py-1 text-xs'
-        }`}>
-          <div className="flex items-center gap-1">
-            <span className="text-amber-400 font-bold">Ví:</span>
-            <span className="font-mono-numbers font-black text-amber-300 text-xs sm:text-sm">
-              {balance.toLocaleString('vi-VN')} Xu
-            </span>
+        {/* Right Action Group */}
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          {/* Live User Wallet Balance Display */}
+          <div className={`flex items-center gap-1.5 bg-slate-950/90 border border-amber-500/40 rounded-xl shadow-inner shrink-0 ${
+            isLandscapeActive ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 sm:px-3 py-1 text-xs'
+          }`}>
+            <div className="flex items-center gap-1">
+              <span className="text-amber-400 font-bold">Ví:</span>
+              <span className="font-mono-numbers font-black text-amber-300 text-xs sm:text-sm">
+                {balance >= 10000000 ? `${(balance / 1000000).toFixed(1)}M` : balance.toLocaleString('vi-VN')}
+              </span>
+            </div>
+            <button
+              onClick={() => onAddFunds(500000)}
+              className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-[10px] font-bold border border-emerald-500/40 cursor-pointer active:scale-95 transition-all"
+              title="Nạp thêm 500.000 Xu miễn phí"
+            >
+              <PlusCircle className="w-3 h-3" />
+              <span>+500K</span>
+            </button>
           </div>
-          <button
-            onClick={() => onAddFunds(500000)}
-            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 text-[10px] font-bold border border-emerald-500/40 cursor-pointer active:scale-95 transition-all"
-            title="Nạp thêm 500.000 Xu miễn phí"
-          >
-            <PlusCircle className="w-3 h-3" />
-            <span>+500K</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-1.5">
-          {/* ROTATE LANDSCAPE BUTTON */}
-          <button
-            onClick={toggleLandscape}
-            className={`flex items-center gap-1 px-2.5 py-1 rounded-xl border text-[11px] font-black transition-all cursor-pointer shadow-md active:scale-95 ${
-              isLandscapeMode
-                ? 'bg-rose-950/90 border-rose-500 text-rose-300 ring-2 ring-rose-500/40 hover:bg-rose-900'
-                : 'bg-gradient-to-r from-amber-500/25 to-yellow-500/25 border-amber-400 text-amber-300 hover:bg-amber-500/35 ring-1 ring-amber-400/50'
-            }`}
-            title={isLandscapeMode ? 'Quay lại màn hình dọc' : 'Xoay ngang màn hình chuẩn Casino'}
-          >
-            <RotateCw className="w-3.5 h-3.5 text-amber-400" />
-            <span>{isLandscapeMode ? '✕ Xoay Dọc' : '🔄 Xoay Ngang'}</span>
-          </button>
 
           {/* Mini Chat Toggle Button with unread badge */}
           <button
@@ -799,7 +1016,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               setShowMiniChat(!showMiniChat);
               if (!showMiniChat) setUnreadChatCount(0);
             }}
-            className={`relative flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer shadow-sm active:scale-95 ${
+            className={`relative flex items-center gap-1 px-2 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer shadow-sm active:scale-95 shrink-0 ${
               showMiniChat
                 ? 'bg-indigo-600/30 border-indigo-400 text-indigo-300 ring-2 ring-indigo-400/40'
                 : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-200'
@@ -807,7 +1024,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             title="Mở chat phòng trực tuyến"
           >
             <MessageSquare className="w-3.5 h-3.5 text-indigo-400" />
-            <span className="hidden xs:inline">Chat</span>
+            <span className="hidden sm:inline">Chat</span>
             {unreadChatCount > 0 && !showMiniChat && (
               <span className="absolute -top-1.5 -right-1 px-1 min-w-[15px] h-3.5 rounded-full bg-rose-500 text-white text-[8px] font-black flex items-center justify-center animate-bounce shadow">
                 {unreadChatCount}
@@ -818,7 +1035,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* Nặn Bát Toggle */}
           <button
             onClick={() => setSqueezeMode(!squeezeMode)}
-            className={`flex items-center gap-1 px-2 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer ${
+            className={`flex items-center gap-1 px-2 py-1 rounded-xl border text-[11px] font-bold transition-all cursor-pointer shrink-0 ${
               squeezeMode
                 ? 'bg-amber-500/20 border-amber-400 text-amber-300 shadow-sm'
                 : 'bg-slate-800 border-slate-700 text-slate-400'
@@ -826,7 +1043,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             title="Bật/Tắt chế độ tự tay nặn bát hồi hộp"
           >
             <Hand className="w-3 h-3" />
-            <span className="hidden xs:inline">Nặn Bát:</span>
+            <span className="hidden sm:inline">Nặn Bát:</span>
             <span className={`font-black ${squeezeMode ? 'text-amber-400' : 'text-slate-500'}`}>
               {squeezeMode ? 'BẬT' : 'TẮT'}
             </span>
@@ -835,19 +1052,33 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {/* Soi Cầu Toggle */}
           <button
             onClick={() => setShowHistoryModal(true)}
-            className="flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200 transition-all cursor-pointer"
+            className="flex items-center gap-1 px-2 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200 transition-all cursor-pointer shrink-0"
+            title="Xem bảng lịch sử soi cầu"
           >
             <History className="w-3 h-3 text-amber-400" />
-            <span className="hidden xs:inline">Soi Cầu</span>
+            <span className="hidden sm:inline">Soi Cầu</span>
           </button>
 
           {/* Luật Chơi */}
           <button
             onClick={() => setShowRulesModal(true)}
-            className="p-1 sm:px-2 sm:py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200 transition-all cursor-pointer"
+            className="p-1 px-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] font-bold text-slate-200 transition-all cursor-pointer shrink-0"
+            title="Hướng dẫn luật chơi"
           >
             <Info className="w-3 h-3 text-sky-400" />
           </button>
+
+          {/* ROTATE LANDSCAPE BUTTON (Chỉ hiện khi đang ở màn hình dọc để xoay sang ngang) */}
+          {!isLandscapeActive && (
+            <button
+              onClick={toggleLandscape}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-xl border text-[11px] font-black transition-all cursor-pointer shadow-md active:scale-95 shrink-0 bg-gradient-to-r from-amber-500/25 to-yellow-500/25 border-amber-400 text-amber-300 hover:bg-amber-500/35 ring-1 ring-amber-400/50"
+              title="Xoay ngang màn hình chuẩn Casino"
+            >
+              <RotateCw className="w-3.5 h-3.5 text-amber-400" />
+              <span>Xoay Ngang</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -861,6 +1092,60 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           }`}
         >
           {scoreNotification.text}
+        </div>
+      )}
+
+      {/* SỰ KIỆN ĐỘNG BÀN CƯỢC CƠM HAY CỨT */}
+      {currentEvent && (
+        <div className={`${
+          isLandscapeActive ? 'py-1 px-2.5 rounded-xl gap-2' : 'p-2.5 sm:p-3 rounded-2xl gap-2.5'
+        } border bg-gradient-to-r ${currentEvent.bgGradient} flex items-center justify-between shadow-xl animate-fadeIn shrink-0`}>
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`${isLandscapeActive ? 'text-lg sm:text-xl' : 'text-2xl sm:text-3xl'} shrink-0 animate-bounce`}>{currentEvent.icon}</span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className={`${isLandscapeActive ? 'text-xs' : 'text-xs sm:text-sm'} font-black uppercase tracking-wide ${currentEvent.color}`}>
+                  {currentEvent.title}
+                </span>
+                <span className="text-[9px] px-1.5 py-0.2 rounded font-black bg-black/60 text-yellow-300 border border-yellow-400/40 uppercase">
+                  {currentEvent.badge}
+                </span>
+              </div>
+              <p className="text-[10px] sm:text-xs text-slate-200 font-medium truncate sm:whitespace-normal">
+                {currentEvent.description}
+              </p>
+            </div>
+          </div>
+
+          {currentEvent.type === 'RED_ENVELOPE' && !currentEvent.rewardClaimed && (
+            <button
+              type="button"
+              onClick={handleClaimRedEnvelope}
+              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-300 hover:from-amber-300 hover:to-yellow-200 text-slate-950 font-black text-xs shadow-lg animate-pulse active:scale-95 cursor-pointer shrink-0"
+            >
+              🧧 Nhận Lì Xì!
+            </button>
+          )}
+
+          {currentEvent.type === 'MYSTERY_LUCKY_WHEEL' && !currentEvent.rewardClaimed && (
+            <button
+              type="button"
+              onClick={handleSpinLuckyWheel}
+              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-cyan-400 to-blue-400 hover:from-cyan-300 hover:to-blue-300 text-slate-950 font-black text-xs shadow-lg animate-pulse active:scale-95 cursor-pointer shrink-0"
+            >
+              🎡 Quay Bát Quái!
+            </button>
+          )}
+
+          {currentEvent.type === 'GOD_OF_WEALTH_BLESSING' && !currentEvent.rewardClaimed && (
+            <button
+              type="button"
+              onClick={handleClaimGodOfWealth}
+              className="px-2.5 py-1 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:from-amber-300 hover:to-yellow-200 text-slate-950 font-black text-xs shadow-lg animate-bounce active:scale-95 cursor-pointer shrink-0"
+            >
+              👑 Nhận Lộc 88K!
+            </button>
+          )}
         </div>
       )}
 
@@ -972,15 +1257,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             <div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 sm:gap-1.5">
-                  <span className={`${isLandscapeActive ? 'text-lg sm:text-xl' : 'text-2xl sm:text-4xl'} drop-shadow-md`}>🍚</span>
+                  <span className={`${isLandscapeActive ? 'text-base sm:text-lg' : 'text-2xl sm:text-4xl'} drop-shadow-md`}>🍚</span>
                   <div>
-                    <h3 className={`${isLandscapeActive ? 'text-sm sm:text-base' : 'text-base sm:text-2xl'} font-black text-amber-300 uppercase leading-none`}>
+                    <h3 className={`${isLandscapeActive ? 'text-xs sm:text-sm' : 'text-base sm:text-2xl'} font-black text-amber-300 uppercase leading-none`}>
                       CƠM
                     </h3>
-                    <span className="text-[9px] sm:text-xs text-amber-400 font-black">11 - 17 Điểm</span>
+                    <span className={`${isLandscapeActive ? 'text-[8px] sm:text-[9px]' : 'text-[9px] sm:text-xs'} text-amber-400 font-black`}>11 - 17 Điểm</span>
                   </div>
                 </div>
-                <span className="text-[8px] sm:text-xs bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded font-black">
+                <span className={`${isLandscapeActive ? 'text-[7px] sm:text-[8px]' : 'text-[8px] sm:text-xs'} bg-amber-500/20 text-amber-300 px-1 py-0.5 rounded font-black`}>
                   1:1.98
                 </span>
               </div>
@@ -989,13 +1274,13 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               <div className={`text-center rounded-xl bg-black/50 border border-amber-500/20 ${
                 isLandscapeActive ? 'my-0.5 py-0.5 px-1' : 'my-1.5 sm:my-2 py-1 sm:py-1.5 px-1 sm:px-2'
               }`}>
-                <span className="text-[8px] sm:text-[10px] text-slate-400 uppercase font-semibold">Phòng Cược</span>
+                <span className={`${isLandscapeActive ? 'text-[7px]' : 'text-[8px] sm:text-[10px]'} text-slate-400 uppercase font-semibold leading-none block`}>Phòng Cược</span>
                 <div className={`font-mono-numbers font-black text-amber-400 leading-tight truncate ${
-                  isLandscapeActive ? 'text-xs sm:text-sm' : 'text-xs sm:text-lg'
+                  isLandscapeActive ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-lg'
                 }`}>
                   {poolCom.toLocaleString('vi-VN')} Xu
                 </div>
-                <span className="text-[7px] sm:text-[9px] text-slate-500">{countCom} người</span>
+                <span className={`${isLandscapeActive ? 'text-[6px]' : 'text-[7px] sm:text-[9px]'} text-slate-500 leading-none`}>{countCom} người</span>
               </div>
             </div>
 
@@ -1010,7 +1295,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               <button
                 disabled={isBetLocked}
                 className={`w-full rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black uppercase tracking-wider shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isLandscapeActive ? 'py-1 text-[9px] sm:text-[10px]' : 'py-1.5 sm:py-2.5 text-[10px] sm:text-xs'
+                  isLandscapeActive ? 'py-0.5 text-[8px] sm:text-[9px]' : 'py-1.5 sm:py-2.5 text-[10px] sm:text-xs'
                 } ${isBetLocked ? 'grayscale' : 'cursor-pointer active:scale-95'}`}
               >
                 {isBetLocked ? '🔒 ĐÃ KHÓA' : (userBets.COM > 0 ? '+ CƯỢC THÊM' : 'CƯỢC CƠM')}
@@ -1025,7 +1310,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             {/* Countdown clock on top */}
             <div className={`${isLandscapeActive ? 'mb-0.5' : 'mb-1.5'} flex items-center justify-center`}>
               <div className={`${
-                isLandscapeActive ? 'w-6 h-6 border' : 'w-10 h-10 sm:w-13 sm:h-13 border-2 sm:border-3'
+                isLandscapeActive ? 'w-6 h-6 border' : 'w-10 h-10 sm:w-12 sm:h-12 border-2 sm:border-3'
               } rounded-full bg-slate-950 ${
                 isBetLocked && phase === 'BETTING'
                   ? 'border-rose-500 shadow-[0_0_20px_rgba(244,63,94,0.7)] animate-pulse'
@@ -1056,8 +1341,8 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
 
             {/* Plate & Dices */}
             <div
-              className={`relative rounded-full bg-gradient-to-tr from-amber-950 via-slate-900 to-amber-900 border-2 sm:border-5 border-amber-500/90 shadow-[0_0_35px_rgba(217,119,6,0.35)] flex items-center justify-center ${
-                isLandscapeActive ? 'w-24 h-24 xs:w-28 xs:h-28 sm:w-32 sm:h-32' : 'w-40 h-40 xs:w-48 xs:h-48 sm:w-60 sm:h-60'
+              className={`relative rounded-full bg-gradient-to-tr from-amber-950 via-slate-900 to-amber-900 border-2 sm:border-4 border-amber-500/90 shadow-[0_0_35px_rgba(217,119,6,0.35)] flex items-center justify-center ${
+                isLandscapeActive ? 'w-20 h-20 sm:w-24 sm:h-24' : 'w-40 h-40 xs:w-48 xs:h-48 sm:w-60 sm:h-60'
               } ${phase === 'SHAKING' ? 'animate-plate-rattle shadow-[0_0_55px_rgba(245,158,11,0.6)]' : ''}`}
             >
               {/* Inner plate felt */}
@@ -1077,22 +1362,22 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                       <Real3DDice
                         value={dices[0]}
                         isShaking={phase === 'SHAKING'}
-                        size={isLandscapeActive ? 24 : 44}
+                        size={isLandscapeActive ? 22 : 44}
                         rotationAngle={diceRotations[0]}
                       />
                     </div>
                     {/* Bottom 2 Dices */}
-                    <div className={`flex items-center justify-center ${isLandscapeActive ? 'gap-1.5' : 'gap-3 sm:gap-4'}`}>
+                    <div className={`flex items-center justify-center ${isLandscapeActive ? 'gap-1' : 'gap-3 sm:gap-4'}`}>
                       <Real3DDice
                         value={dices[1]}
                         isShaking={phase === 'SHAKING'}
-                        size={isLandscapeActive ? 24 : 44}
+                        size={isLandscapeActive ? 22 : 44}
                         rotationAngle={diceRotations[1]}
                       />
                       <Real3DDice
                         value={dices[2]}
                         isShaking={phase === 'SHAKING'}
-                        size={isLandscapeActive ? 24 : 44}
+                        size={isLandscapeActive ? 22 : 44}
                         rotationAngle={diceRotations[2]}
                       />
                     </div>
@@ -1130,7 +1415,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                   {/* Núm Bát Vàng Ròng 3D (Golden Knob) */}
                   <div className="relative z-10 flex flex-col items-center justify-center">
                     <div className={`${
-                      isLandscapeActive ? 'w-6 h-6' : 'w-10 h-10 sm:w-13 sm:h-13'
+                      isLandscapeActive ? 'w-6 h-6' : 'w-10 h-10 sm:w-12 sm:h-12'
                     } rounded-full bg-gradient-to-tr from-amber-600 via-yellow-400 to-amber-300 border-2 border-amber-200 shadow-[0_4px_15px_rgba(0,0,0,0.8)] flex items-center justify-center mb-1 group-active:scale-95 transition-transform`}>
                       <span className={isLandscapeActive ? 'text-xs' : 'text-base sm:text-xl drop-shadow'}>🖐️</span>
                     </div>
@@ -1196,15 +1481,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             <div>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1 sm:gap-1.5">
-                  <span className={`${isLandscapeActive ? 'text-lg sm:text-xl' : 'text-2xl sm:text-4xl'} drop-shadow-md`}>💩</span>
+                  <span className={`${isLandscapeActive ? 'text-base sm:text-lg' : 'text-2xl sm:text-4xl'} drop-shadow-md`}>💩</span>
                   <div>
-                    <h3 className={`${isLandscapeActive ? 'text-sm sm:text-base' : 'text-base sm:text-2xl'} font-black text-yellow-500 uppercase leading-none`}>
+                    <h3 className={`${isLandscapeActive ? 'text-xs sm:text-sm' : 'text-base sm:text-2xl'} font-black text-yellow-500 uppercase leading-none`}>
                       CỨT
                     </h3>
-                    <span className="text-[9px] sm:text-xs text-yellow-500 font-black">4 - 10 Điểm</span>
+                    <span className={`${isLandscapeActive ? 'text-[8px] sm:text-[9px]' : 'text-[9px] sm:text-xs'} text-yellow-500 font-black`}>4 - 10 Điểm</span>
                   </div>
                 </div>
-                <span className="text-[8px] sm:text-xs bg-yellow-600/20 text-yellow-400 px-1 py-0.5 rounded font-black">
+                <span className={`${isLandscapeActive ? 'text-[7px] sm:text-[8px]' : 'text-[8px] sm:text-xs'} bg-yellow-600/20 text-yellow-400 px-1 py-0.5 rounded font-black`}>
                   1:1.98
                 </span>
               </div>
@@ -1213,13 +1498,13 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               <div className={`text-center rounded-xl bg-black/50 border border-yellow-700/20 ${
                 isLandscapeActive ? 'my-0.5 py-0.5 px-1' : 'my-1.5 sm:my-2 py-1 sm:py-1.5 px-1 sm:px-2'
               }`}>
-                <span className="text-[8px] sm:text-[10px] text-slate-400 uppercase font-semibold">Phòng Cược</span>
+                <span className={`${isLandscapeActive ? 'text-[7px]' : 'text-[8px] sm:text-[10px]'} text-slate-400 uppercase font-semibold leading-none block`}>Phòng Cược</span>
                 <div className={`font-mono-numbers font-black text-yellow-500 leading-tight truncate ${
-                  isLandscapeActive ? 'text-xs sm:text-sm' : 'text-xs sm:text-lg'
+                  isLandscapeActive ? 'text-[10px] sm:text-xs' : 'text-xs sm:text-lg'
                 }`}>
                   {poolCut.toLocaleString('vi-VN')} Xu
                 </div>
-                <span className="text-[7px] sm:text-[9px] text-slate-500">{countCut} người</span>
+                <span className={`${isLandscapeActive ? 'text-[6px]' : 'text-[7px] sm:text-[9px]'} text-slate-500 leading-none`}>{countCut} người</span>
               </div>
             </div>
 
@@ -1234,7 +1519,7 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
               <button
                 disabled={isBetLocked}
                 className={`w-full rounded-xl bg-gradient-to-r from-yellow-600 to-amber-700 text-white font-black uppercase tracking-wider shadow-md disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isLandscapeActive ? 'py-1 text-[9px] sm:text-[10px]' : 'py-1.5 sm:py-2.5 text-[10px] sm:text-xs'
+                  isLandscapeActive ? 'py-0.5 text-[8px] sm:text-[9px]' : 'py-1.5 sm:py-2.5 text-[10px] sm:text-xs'
                 } ${isBetLocked ? 'grayscale' : 'cursor-pointer active:scale-95'}`}
               >
                 {isBetLocked ? '🔒 ĐÃ KHÓA' : (userBets.CUT > 0 ? '+ CƯỢC THÊM' : 'CƯỢC CỨT')}
@@ -1344,14 +1629,16 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
       {/* ============================================================== */}
       {/* 4. DẢI CHIP CASINO & THANH THAO TÁC CƯỢC CHUẨN CASINO */}
       {/* ============================================================== */}
-      <div className={`bg-slate-900/95 border border-slate-800 rounded-xl sm:rounded-2xl p-1.5 sm:p-2 flex flex-wrap sm:flex-nowrap items-center justify-between gap-1.5 shadow-xl shrink-0 ${isBetLocked ? 'opacity-70' : ''}`}>
+      <div className={`bg-slate-900/95 border border-slate-800 rounded-xl sm:rounded-2xl ${
+        isLandscapeActive ? 'p-1 gap-1' : 'p-1.5 sm:p-2 gap-1.5'
+      } flex flex-wrap sm:flex-nowrap items-center justify-between shadow-xl shrink-0 ${isBetLocked ? 'opacity-70' : ''}`}>
         {/* Nhóm nút thao tác: Cược Lại, Gấp Đôi, Hủy Cược */}
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={handleReBet}
             disabled={isBetLocked}
-            className={`flex items-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-slate-200 px-2 sm:px-2.5 py-1 sm:py-1.5 ${
-              isLandscapeActive ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs'
+            className={`flex items-center gap-1 rounded-lg sm:rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-slate-200 ${
+              isLandscapeActive ? 'px-1.5 py-0.5 text-[8px] sm:text-[9px]' : 'px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs'
             } disabled:opacity-40 transition-all ${
               isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-95'
             }`}
@@ -1363,8 +1650,8 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           <button
             onClick={handleDoubleBet}
             disabled={isBetLocked || totalUserBet === 0}
-            className={`flex items-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-amber-300 px-2 sm:px-2.5 py-1 sm:py-1.5 ${
-              isLandscapeActive ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs'
+            className={`flex items-center gap-1 rounded-lg sm:rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 font-bold text-amber-300 ${
+              isLandscapeActive ? 'px-1.5 py-0.5 text-[8px] sm:text-[9px]' : 'px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs'
             } disabled:opacity-40 transition-all ${
               isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-95'
             }`}
@@ -1376,8 +1663,8 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           {totalUserBet > 0 && !isBetLocked && (
             <button
               onClick={clearBets}
-              className={`flex items-center gap-1 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/50 font-bold text-red-300 px-2 sm:px-2.5 py-1 sm:py-1.5 ${
-                isLandscapeActive ? 'text-[9px] sm:text-[10px]' : 'text-[10px] sm:text-xs'
+              className={`flex items-center gap-1 rounded-lg sm:rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-500/50 font-bold text-red-300 ${
+                isLandscapeActive ? 'px-1.5 py-0.5 text-[8px] sm:text-[9px]' : 'px-2 sm:px-2.5 py-1 sm:py-1.5 text-[10px] sm:text-xs'
               } cursor-pointer active:scale-95 transition-all`}
               title="Hủy toàn bộ cược phiên này"
             >
@@ -1403,15 +1690,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
                   setSelectedChip(chip.value);
                 }}
                 className={`relative rounded-full flex flex-col items-center justify-center border-2 border-dashed shadow-md transition-all shrink-0 ${
-                  isLandscapeActive ? 'w-7 h-7 sm:w-8 sm:h-8' : 'w-8 h-8 sm:w-10 sm:h-10'
+                  isLandscapeActive ? 'w-6 h-6 sm:w-7 sm:h-7' : 'w-8 h-8 sm:w-10 sm:h-10'
                 } ${chip.color} ${
                   isSelected
-                    ? `scale-110 -translate-y-0.5 ring-3 ${chip.ring} brightness-110 shadow-lg`
+                    ? `scale-110 -translate-y-0.5 ring-2 ring-yellow-400 brightness-110 shadow-lg`
                     : 'opacity-85 hover:opacity-100'
                 } ${isBetLocked ? 'cursor-not-allowed opacity-60' : 'cursor-pointer active:scale-95'}`}
               >
                 <div className={`rounded-full border border-white/40 flex items-center justify-center font-mono-numbers font-black ${
-                  isLandscapeActive ? 'w-5 h-5 sm:w-6 sm:h-6 text-[8px] sm:text-[9px]' : 'w-6 h-6 sm:w-7 sm:h-7 text-[9px] sm:text-[11px]'
+                  isLandscapeActive ? 'w-4.5 h-4.5 sm:w-5 sm:h-5 text-[7px] sm:text-[8px]' : 'w-6 h-6 sm:w-7 sm:h-7 text-[9px] sm:text-[11px]'
                 }`}>
                   {chip.label}
                 </div>
@@ -1424,15 +1711,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
             onClick={handleAllIn}
             disabled={isBetLocked || balance <= 0}
             className={`relative rounded-full sm:rounded-xl flex items-center justify-center border-2 border-amber-400 bg-gradient-to-r from-amber-600 via-yellow-500 to-amber-600 text-slate-950 font-black shadow-lg shadow-amber-500/30 transition-all shrink-0 disabled:opacity-40 ${
-              isLandscapeActive ? 'px-2 py-0.5 text-[9px] h-7 sm:h-8' : 'px-2.5 sm:px-3 py-1 text-[10px] sm:text-xs h-8 sm:h-10'
+              isLandscapeActive ? 'px-1.5 py-0.5 text-[8px] h-6 sm:h-7' : 'px-2.5 sm:px-3 py-1 text-[10px] sm:text-xs h-8 sm:h-10'
             } ${
               selectedChip === balance && balance > 0
-                ? 'ring-3 ring-yellow-300 scale-105 brightness-110'
+                ? 'ring-2 ring-yellow-300 scale-105 brightness-110'
                 : 'hover:brightness-110'
             } ${isBetLocked ? 'cursor-not-allowed' : 'cursor-pointer active:scale-95'}`}
             title="Cược tất tay toàn bộ số dư"
           >
-            <span className="mr-0.5 text-xs">⚡</span>
+            <span className="mr-0.5 text-[9px]">⚡</span>
             <span className="font-black uppercase tracking-wider">Tất Tay</span>
           </button>
         </div>
@@ -1726,6 +2013,15 @@ export const ComVaCutGame: React.FC<ComVaCutGameProps> = ({
           setShowGameHub(false);
         }}
         balance={balance}
+      />
+
+      {/* SOLO DUEL MODAL (ĐẤU TRƯỜNG 1V1, CHUỖI SINH TỒN & LEO THÁP) */}
+      <ComCutDuelModal
+        isOpen={showSoloDuelModal}
+        onClose={() => setShowSoloDuelModal(false)}
+        balance={balance}
+        onUpdateBalance={onUpdateBalance}
+        onAwardExp={onAwardExp}
       />
     </div>
   );

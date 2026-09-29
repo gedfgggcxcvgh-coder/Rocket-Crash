@@ -2,6 +2,8 @@ export type GamePhase = 'COUNTDOWN' | 'FLYING' | 'CRASHED';
 
 export type FlightMode = 'HIGH_FLYER' | 'MOONSHOT' | 'CLASSIC';
 
+export type BotArchetype = 'DIAMOND' | 'SAFE' | 'WHALE' | 'MARTINGALE' | 'ORACLE';
+
 export interface PlayerBet {
   id: string;
   username: string;
@@ -13,6 +15,9 @@ export interface PlayerBet {
   isCurrentUser?: boolean;
   vipTitle?: string;
   badge?: string;
+  badgeColor?: string;
+  botArchetype?: BotArchetype;
+  isWhale?: boolean;
   betIndex?: number;
 }
 
@@ -34,6 +39,23 @@ export interface RoundHistory {
   mode?: FlightMode;
 }
 
+export type RankTierId = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND' | 'MASTER' | 'LEGEND';
+
+export interface RankTierInfo {
+  id: RankTierId;
+  name: string;
+  division: string;
+  level: number;
+  minExp: number;
+  maxExp: number;
+  icon: string;
+  color: string;
+  badgeBg: string;
+  border: string;
+  title: string;
+  perkBonusPercent: number;
+}
+
 export interface UserStats {
   balance: number;
   totalGames: number;
@@ -45,6 +67,17 @@ export interface UserStats {
   equippedSkin?: RocketSkinId;
   unlockedSkins?: RocketSkinId[];
   vipTitle?: string;
+  rankExp?: number;
+  rankLevel?: number;
+  rankTier?: RankTierId;
+  rocketGames?: number;
+  rocketWins?: number;
+  rocketProfit?: number;
+  comCutGames?: number;
+  comCutWins?: number;
+  comCutProfit?: number;
+  comCutBaoWins?: number;
+  duelWins?: number;
 }
 
 export interface ChatMessage {
@@ -110,6 +143,9 @@ export interface DuelState {
   active: boolean;
   opponentName: string;
   opponentAvatar: string;
+  opponentTitle?: string;
+  opponentDifficulty?: 'DỄ' | 'VỪA' | 'KHÓ' | 'CAO THỦ' | 'ÁC MỘNG';
+  opponentQuote?: string;
   wager: number;
   status: 'WAITING' | 'PLAYING' | 'FINISHED';
   userMult?: number;
@@ -120,16 +156,31 @@ export interface DuelState {
   resultMessage?: string;
 }
 
-export interface LeaderboardItem {
+export interface UnifiedLeaderboardItem {
   id: string;
   username: string;
   avatar: string;
   totalProfit: number;
+  totalWagered?: number;
   highestMultiplier: number;
   wins: number;
+  totalGames?: number;
+  rocketProfit?: number;
+  rocketWins?: number;
+  comCutProfit?: number;
+  comCutWins?: number;
+  comCutBaoWins?: number;
+  duelWins?: number;
+  rankTier: RankTierId;
+  rankLevel: number;
+  rankExp: number;
   vipTitle: string;
   badge: string;
+  isCurrentUser?: boolean;
+  isBot?: boolean;
 }
+
+export type LeaderboardItem = UnifiedLeaderboardItem;
 
 export type ComCutPhase = 'BETTING' | 'SHAKING' | 'OPENING' | 'RESULT';
 export type ComCutBetType = 'COM' | 'CUT' | 'BAO_COM' | 'BAO_CUT' | 'COM_GA' | 'CUT_RUOI';
@@ -174,3 +225,75 @@ export interface ComCutGameState {
   serverTime?: number;
   userBets?: Record<ComCutBetType, number>;
 }
+
+// Com & Cut Dynamic In-Game Events
+export type ComCutEventType =
+  | 'GOLDEN_STORM'    // Bão Vàng x35
+  | 'RED_ENVELOPE'    // Lì Xì Đại Gia Rơi Bàn Cược
+  | 'FORTUNE_SHIELD'  // Khiên Thần Tài Hoàn Cược 50%
+  | 'CHICKEN_FEAST'   // Tiệc Cơm Gà x10
+  | 'GOLDEN_POOP'     // Cứt Bảo Kim Phát Quang
+  | 'LUCKY_FRENZY'    // Giờ Vàng Tỷ Lệ x2.1
+  | 'DOUBLE_COM_RAIN' // Mưa Cơm Hải Sản x2.50
+  | 'POOP_REVERSAL'   // Bẻ Cầu Thần Thánh +30%
+  | 'MYSTERY_LUCKY_WHEEL' // Vòng Quay Bát Quái
+  | 'METEOR_JACKPOT'  // Mưa Thiên Thạch Nổ Hũ
+  | 'GOD_OF_WEALTH_BLESSING'; // Thần Tài Giáng Lâm +88.888 Xu x2 EXP
+
+export interface ComCutActiveEvent {
+  id: string;
+  type: ComCutEventType;
+  title: string;
+  description: string;
+  icon: string;
+  badge: string;
+  color: string;
+  bgGradient: string;
+  multiplierBoost?: number;
+  rewardClaimed?: boolean;
+  rewardAmount?: number;
+  envelopePos?: { x: number; y: number };
+}
+
+// Com & Cut Solo 1v1 Boss & Match System
+export type ComCutBossDifficulty = 'DỄ' | 'VỪA' | 'KHÓ' | 'CAO THỦ' | 'ÁC MỘNG';
+
+export interface ComCutBoss {
+  id: string;
+  name: string;
+  avatar: string;
+  title: string;
+  difficulty: ComCutBossDifficulty;
+  quote: string;
+  trashTalk: {
+    win: string[];
+    lose: string[];
+    pick: string[];
+  };
+  recommendedWagers: number[];
+  border: string;
+  glow: string;
+  icon: string;
+  preferredSide?: 'COM' | 'CUT' | 'BAO' | 'RANDOM';
+}
+
+export interface ComCutDuelMatch {
+  active: boolean;
+  boss: ComCutBoss;
+  wager: number;
+  mode: 'QUICK' | 'BO3';
+  roundNumber: number;
+  userScore: number;
+  bossScore: number;
+  status: 'CHOOSING' | 'SHAKING' | 'ROUND_OVER' | 'MATCH_OVER';
+  userPick?: ComCutBetType;
+  bossPick?: ComCutBetType;
+  dices?: [number, number, number];
+  total?: number;
+  outcome?: 'COM' | 'CUT';
+  isBao?: boolean;
+  roundWinner?: 'USER' | 'BOSS' | 'DRAW';
+  matchWinner?: 'USER' | 'BOSS' | 'DRAW';
+  message?: string;
+}
+

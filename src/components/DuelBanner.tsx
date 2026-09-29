@@ -84,13 +84,22 @@ export const DuelBanner: React.FC<DuelBannerProps> = ({
             <span className="font-extrabold text-white text-xs uppercase tracking-wide">
               SOLO 1V1 CHIẾM NGAI
             </span>
+            {duel.opponentDifficulty && (
+              <span className="text-[10px] px-1.5 py-0.2 rounded font-black bg-red-500/20 text-red-300 border border-red-500/40">
+                {duel.opponentDifficulty}
+              </span>
+            )}
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold border border-amber-500/30">
               Tổng Hũ: {(duel.wager * 2).toLocaleString('vi-VN')} Xu
             </span>
           </div>
-          <p className="text-[11px] text-slate-300 font-medium">
+          <p className="text-[11px] text-slate-300 font-medium flex items-center gap-1.5">
             {duel.status === 'WAITING' && 'Đang chờ ván bay tiếp theo...'}
-            {duel.status === 'PLAYING' && 'Ván đấu đang diễn ra! Ai gồng hệ số cao hơn sẽ húp hũ!'}
+            {duel.status === 'PLAYING' && (
+              <span>
+                VS <strong className="text-white">{duel.opponentName}</strong> ({duel.opponentTitle || 'Boss AI'}): Ai gồng hệ số cao hơn sẽ húp trọn hũ!
+              </span>
+            )}
             {duel.status === 'FINISHED' && (duel.resultMessage || 'Kết quả trận đấu')}
           </p>
         </div>
