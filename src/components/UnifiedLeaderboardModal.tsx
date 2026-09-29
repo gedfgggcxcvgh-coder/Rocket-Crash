@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { UnifiedLeaderboardItem, RankTierId } from '../types/game';
-import { calculateRankFromExp, RANK_TIERS_CONFIG } from '../utils/rankSystem';
+import { calculateRankFromUserStats, calculateRankFromExp, STAR_RANK_CONFIGS } from '../utils/rankSystem';
 import {
   Trophy,
   Crown,
@@ -143,11 +143,11 @@ export const UnifiedLeaderboardModal: React.FC<UnifiedLeaderboardModalProps> = (
                   {currentUserName || 'Bạn'}
                 </span>
                 <span className={`text-[10px] px-2 py-0.2 rounded font-black border ${getRankBadgeClass(myRank.tierId)}`}>
-                  {myRank.icon} {myRank.tierName} {myRank.division}
+                  {myRank.icon} {myRank.tierName} {myRank.division} ({myRank.starsVisual})
                 </span>
               </div>
               <div className="text-[11px] text-slate-400 font-medium mt-0.5">
-                Cấp {myRank.level} • <span className="text-amber-400 font-mono-numbers font-semibold">{myRank.currentExp.toLocaleString('vi-VN')} EXP</span>
+                Cấp {myRank.level} • <span className="text-yellow-400 font-mono-numbers font-bold">{myRank.totalStars} SAO ⭐</span>
                 {myRank.perkBonusPercent > 0 && (
                   <span className="ml-1.5 text-emerald-400 font-bold">
                     (+{myRank.perkBonusPercent}% Thưởng Faucet)
@@ -239,7 +239,7 @@ export const UnifiedLeaderboardModal: React.FC<UnifiedLeaderboardModalProps> = (
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {RANK_TIERS_CONFIG.map(tier => {
+              {STAR_RANK_CONFIGS.map(tier => {
                 const isCurrent = myRank.level === tier.level;
                 const isUnlocked = myRank.level >= tier.level;
 
@@ -283,7 +283,7 @@ export const UnifiedLeaderboardModal: React.FC<UnifiedLeaderboardModalProps> = (
                     </div>
 
                     <div className="text-[11px] text-slate-300 font-medium flex items-center justify-between border-t border-slate-800/60 pt-2">
-                      <span>Yêu cầu: <strong className="font-mono text-amber-400 font-semibold">{tier.minExp.toLocaleString('vi-VN')} EXP</strong></span>
+                      <span>Yêu cầu: <strong className="font-mono text-yellow-400 font-semibold">{tier.minStars} SAO ⭐</strong></span>
                       <span className="text-emerald-400 font-bold">+{tier.perkBonusPercent}% Faucet</span>
                     </div>
                   </div>

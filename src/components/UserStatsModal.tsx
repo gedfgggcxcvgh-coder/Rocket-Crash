@@ -1,7 +1,7 @@
 import React from 'react';
 import { UserStats } from '../types/game';
-import { Trophy, Award, TrendingUp, DollarSign, X, RotateCcw, Rocket, Sparkles, ShieldCheck } from 'lucide-react';
-import { calculateRankFromExp } from '../utils/rankSystem';
+import { Trophy, Award, TrendingUp, DollarSign, X, RotateCcw, Rocket, Sparkles, ShieldCheck, Shield } from 'lucide-react';
+import { calculateRankFromUserStats } from '../utils/rankSystem';
 
 interface UserStatsModalProps {
   stats: UserStats;
@@ -19,7 +19,7 @@ export const UserStatsModal: React.FC<UserStatsModalProps> = ({
   if (!isOpen) return null;
 
   const winRate = stats.totalGames > 0 ? ((stats.wins / stats.totalGames) * 100).toFixed(1) : '0.0';
-  const rank = calculateRankFromExp(stats.rankExp || 1000);
+  const rank = calculateRankFromUserStats(stats);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-150">
@@ -31,8 +31,8 @@ export const UserStatsModal: React.FC<UserStatsModalProps> = ({
               <Trophy className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold text-white">Thống Kê & Cấp Bậc Cá Nhân</h3>
-              <p className="text-xs text-slate-400">Dữ liệu tổng hợp từ cả hai trò chơi</p>
+              <h3 className="text-base font-extrabold text-white">Thống Kê & Rank 5v5</h3>
+              <p className="text-xs text-slate-400">Cơ chế leo Rank tính theo Sao (Win +1 ⭐ / Loss -1 ⭐)</p>
             </div>
           </div>
           <button
@@ -47,14 +47,14 @@ export const UserStatsModal: React.FC<UserStatsModalProps> = ({
         <div className={`p-4 rounded-2xl border ${rank.border} bg-slate-950/80 flex flex-col gap-2.5 shadow-lg ${rank.glow}`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <span className="text-2xl">{rank.icon}</span>
+              <span className="text-3xl">{rank.icon}</span>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-sm font-black uppercase ${rank.color}`}>
+                  <span className={`text-base font-black uppercase ${rank.color}`}>
                     {rank.tierName} {rank.division}
                   </span>
-                  <span className="text-[10px] px-2 py-0.2 rounded font-bold bg-slate-800 text-slate-300">
-                    Cấp {rank.level}
+                  <span className="text-xs font-mono font-black text-yellow-300 bg-black/60 px-2 py-0.5 rounded border border-yellow-500/40">
+                    {rank.starsVisual}
                   </span>
                 </div>
                 <span className="text-xs text-slate-400 font-medium">{rank.title}</span>
@@ -62,8 +62,8 @@ export const UserStatsModal: React.FC<UserStatsModalProps> = ({
             </div>
 
             <div className="text-right">
-              <span className="text-xs font-mono font-bold text-amber-400 block">
-                {rank.currentExp.toLocaleString('vi-VN')} EXP
+              <span className="text-sm font-mono font-extrabold text-yellow-400 block">
+                {rank.totalStars} SAO ⭐
               </span>
               <span className="text-[10px] text-emerald-400 font-semibold">
                 +{rank.perkBonusPercent}% Thưởng Faucet
@@ -71,18 +71,29 @@ export const UserStatsModal: React.FC<UserStatsModalProps> = ({
             </div>
           </div>
 
-          {/* EXP Progress Bar */}
-          <div className="w-full">
+          {/* Star Progress Bar */}
+          <div className="w-full mt-1">
             <div className="flex items-center justify-between text-[10px] text-slate-400 mb-1 font-mono">
-              <span>Tiến trình thăng cấp</span>
-              <span>{rank.progressPercent}% ({rank.expInLevel.toLocaleString('vi-VN')} / {rank.expNeededInLevel.toLocaleString('vi-VN')} EXP)</span>
+              <span>Tiến trình Bậc {rank.tierName} {rank.division}</span>
+              <span className="text-yellow-300 font-bold">{rank.starsInDivision} / {rank.starsNeededInDivision} ⭐</span>
             </div>
-            <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
+            <div className="w-full h-2.5 rounded-full bg-slate-800 overflow-hidden border border-slate-700">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-300"
+                className="h-full rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 transition-all duration-300"
                 style={{ width: `${rank.progressPercent}%` }}
               />
             </div>
+          </div>
+
+          {/* Protection Points Bar */}
+          <div className="w-full pt-1.5 border-t border-slate-800/80 flex items-center justify-between text-[10px]">
+            <div className="flex items-center gap-1 text-cyan-300 font-bold">
+              <Shield className="w-3 h-3 text-cyan-400" />
+              <span>Điểm Bảo Hiểm Rank: {rank.protectionPoints}/100</span>
+            </div>
+            <span className="text-slate-400">
+              {rank.protectionPoints >= 100 ? '🛡️ Sẵn sàng bảo vệ 1 Sao khi thua!' : 'Cần 100 điểm để kích hoạt khiên'}
+            </span>
           </div>
         </div>
 

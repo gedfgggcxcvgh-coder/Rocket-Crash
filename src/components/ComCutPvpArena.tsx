@@ -21,6 +21,7 @@ export interface PvpRealOpponent {
   sidePreference?: 'COM' | 'CUT';
   status: 'WAITING' | 'PLAYING';
   isVip?: boolean;
+  isRealPlayer?: boolean;
 }
 
 export interface PvpRealMatch {
@@ -190,40 +191,146 @@ export const ComCutPvpArena: React.FC<ComCutPvpArenaProps> = ({
   const [opponentBubble, setOpponentBubble] = useState<string | null>(null);
   const [userBubble, setUserBubble] = useState<string | null>(null);
 
-  // Quick Match Timer Effect
-  useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (isSearchingQuick) {
-      timer = setTimeout(() => {
-        setIsSearchingQuick(false);
-        setSearchTimer(0);
-        const randomOpp = opponentsList[Math.floor(Math.random() * opponentsList.length)];
-        startPvpMatch({
-          ...randomOpp,
-          wager: quickWager,
-          mode: quickMode,
-        });
-      }, 1500);
-    }
-    return () => clearTimeout(timer);
-  }, [isSearchingQuick, quickWager, quickMode, opponentsList]);
+  // Real Player Created Rooms State
+  const [myCreatedRoom, setMyCreatedRoom] = useState<PvpRealOpponent | null>(null);
+  const [realPlayerRooms, setRealPlayerRooms] = useState<PvpRealOpponent[]>([]);
 
-  // Created Room Auto-Challenger Effect
+  // Cross-Tab Broadcast Channel Sync for Real Player Rooms
   useEffect(() => {
-    let timer: NodeJS.Timeout;
-    if (roomCreatedWaiting) {
-      timer = setTimeout(() => {
-        setRoomCreatedWaiting(false);
-        const randomOpp = opponentsList[Math.floor(Math.random() * opponentsList.length)];
-        startPvpMatch({
-          ...randomOpp,
-          wager: customWager,
-          mode: customMode,
-        });
-      }, 2500);
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('comcut_pvp_channel');
+      bc.onmessage = (event) => {
+        if (event.data?.type === 'NEW_ROOM_CREATED') {
+          const room = event.data.room as PvpRealOpponent;
+          setRealPlayerRooms((prev) => [room, ...prev.filter((r) => r.id !== room.id)]);
+        } else if (event.data?.type === 'ROOM_CLOSED') {
+          const roomId = event.data.roomId;
+          setRealPlayerRooms((prev) => prev.filter((r) => r.id !== roomId));
+        } else if (event.data?.type === 'ROOM_JOINED') {
+          const { roomId, opponent } = event.data;
+          if (myCreatedRoom && myCreatedRoom.id === roomId) {
+            setMyCreatedRoom(null);
+            startPvpMatch(opponent);
+          }
+        }
+      };
+    } catch (e) {
+      console.log('BroadcastChannel not supported:', e);
     }
-    return () => clearTimeout(timer);
-  }, [roomCreatedWaiting, customWager, customMode, opponentsList]);
+
+    // Storage event fallback for cross-tab sync
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'comcut_active_pvp_rooms') {
+        try {
+          const rooms = JSON.parse(e.newValue || '[]');
+          setRealPlayerRooms(rooms);
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      bc?.close();
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [myCreatedRoom]);
+
+  // Handle Quick Match Search
+  const handleQuickMatchSearch = () => {
+    sounds.playClick();
+    // Check if a real player room exists with matching wager
+    const availableRealRoom = realPlayerRooms.find((r) => r.isRealPlayer && r.status === 'WAITING');
+    if (availableRealRoom) {
+      try {
+        const bc = new BroadcastChannel('comcut_pvp_channel');
+        bc.postMessage({
+          type: 'ROOM_JOINED',
+          roomId: availableRealRoom.id,
+          opponent: {
+            id: 'real_user_' + Date.now(),
+            name: 'Người Chơi Thật',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=RealGuest',
+            badge: '🔴 Người Chơi Thật',
+            badgeColor: 'border-emerald-400 text-emerald-300 bg-emerald-950/80',
+            winRate: 62,
+            totalMatches: 30,
+            wager: availableRealRoom.wager,
+            mode: availableRealRoom.mode,
+            status: 'PLAYING',
+          },
+        });
+        bc.close();
+      } catch {}
+      startPvpMatch(availableRealRoom);
+    } else {
+      setIsSearchingQuick(true);
+      setSearchTimer(0);
+    }
+  };
+  const handleCreateRealRoom = () => {
+    if (balance < customWager) {
+      sounds.playErrorBeep();
+      alert('Số dư không đủ để mở phòng!');
+      return;
+    }
+
+    sounds.playClick();
+    const newRoom: PvpRealOpponent = {
+      id: 'room_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      name: 'Bạn (Chủ Phòng)',
+      avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=You',
+      badge: '🔴 Người Chơi Thật',
+      badgeColor: 'border-emerald-400 text-emerald-300 bg-emerald-950/80',
+      winRate: 65,
+      totalMatches: 42,
+      wager: customWager,
+      mode: customMode,
+      status: 'WAITING',
+      isVip: true,
+    };
+
+    setMyCreatedRoom(newRoom);
+    setRoomCreatedWaiting(true);
+
+    // Broadcast new room
+    try {
+      const bc = new BroadcastChannel('comcut_pvp_channel');
+      bc.postMessage({ type: 'NEW_ROOM_CREATED', room: newRoom });
+      bc.close();
+    } catch {}
+
+    const currentRooms = JSON.parse(localStorage.getItem('comcut_active_pvp_rooms') || '[]');
+    const updated = [newRoom, ...currentRooms];
+    localStorage.setItem('comcut_active_pvp_rooms', JSON.stringify(updated));
+  };
+
+  // Cancel Room
+  const handleCancelMyRoom = () => {
+    sounds.playClick();
+    if (myCreatedRoom) {
+      try {
+        const bc = new BroadcastChannel('comcut_pvp_channel');
+        bc.postMessage({ type: 'ROOM_CLOSED', roomId: myCreatedRoom.id });
+        bc.close();
+      } catch {}
+    }
+    setMyCreatedRoom(null);
+    setRoomCreatedWaiting(false);
+  };
+
+  // Force Match with Bot (ONLY on explicit user click)
+  const handleForceMatchBot = () => {
+    sounds.playClick();
+    setRoomCreatedWaiting(false);
+    setIsSearchingQuick(false);
+    const randomOpp = DEFAULT_OPPONENTS[Math.floor(Math.random() * DEFAULT_OPPONENTS.length)];
+    startPvpMatch({
+      ...randomOpp,
+      wager: myCreatedRoom ? myCreatedRoom.wager : quickWager,
+      mode: myCreatedRoom ? myCreatedRoom.mode : quickMode,
+    });
+  };
 
   // Start PvP Match
   const startPvpMatch = (opponent: PvpRealOpponent) => {
@@ -499,26 +606,48 @@ export const ComCutPvpArena: React.FC<ComCutPvpArenaProps> = ({
               {/* Quick Match Launch Button */}
               <button
                 type="button"
-                onClick={() => {
-                  sounds.playClick();
-                  setIsSearchingQuick(true);
-                  setSearchTimer(0);
-                }}
+                onClick={handleQuickMatchSearch}
                 disabled={isSearchingQuick || balance < quickWager}
                 className="w-full py-2 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {isSearchingQuick ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Đang Ghép Đối Thủ ({searchTimer}s)...</span>
+                    <span>Đang Quét Tìm Người Chơi Thật...</span>
                   </>
                 ) : (
                   <>
                     <Swords className="w-3.5 h-3.5" />
-                    <span>TÌM ĐỐI THỦ • {quickWager.toLocaleString('vi-VN')} XU</span>
+                    <span>TÌM ĐỐI THỦ THẬT • {quickWager.toLocaleString('vi-VN')} XU</span>
                   </>
                 )}
               </button>
+
+              {/* Searching Quick Status Banner */}
+              {isSearchingQuick && (
+                <div className="flex flex-col gap-1 mt-1 p-2 rounded-xl bg-slate-900/90 border border-amber-500/40 text-center animate-fadeIn">
+                  <span className="text-[10px] text-amber-300 font-black flex items-center justify-center gap-1">
+                    <Radio className="w-3 h-3 text-amber-400 animate-pulse" />
+                    <span>Đang quét tìm bàn người chơi thật cùng mức {quickWager.toLocaleString('vi-VN')} Xu...</span>
+                  </span>
+                  <div className="flex items-center justify-center gap-2 mt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsSearchingQuick(false)}
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 text-slate-300 text-[10px] font-bold transition-all cursor-pointer"
+                    >
+                      Dừng Quét
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleForceMatchBot}
+                      className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400 text-amber-300 text-[10px] font-bold transition-all cursor-pointer"
+                    >
+                      🤖 Ghép Ngay Với Bot AI
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* CARD 2: TẠO PHÒNG THÁCH ĐẤU */}
@@ -572,17 +701,14 @@ export const ComCutPvpArena: React.FC<ComCutPvpArenaProps> = ({
               {/* Create Room Button */}
               <button
                 type="button"
-                onClick={() => {
-                  sounds.playClick();
-                  setRoomCreatedWaiting(true);
-                }}
+                onClick={handleCreateRealRoom}
                 disabled={roomCreatedWaiting || balance < customWager}
                 className="w-full py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-500 hover:to-indigo-400 text-white font-black text-xs shadow-md transition-all active:scale-95 cursor-pointer disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
                 {roomCreatedWaiting ? (
                   <>
                     <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    <span>Bàn Đang Mở • Đợi Đối Thủ Vào...</span>
+                    <span>Bàn Đang Treo Công Khai...</span>
                   </>
                 ) : (
                   <>
@@ -593,6 +719,38 @@ export const ComCutPvpArena: React.FC<ComCutPvpArenaProps> = ({
               </button>
             </div>
           </div>
+
+          {/* ACTIVE MY ROOM STATUS BANNER */}
+          {roomCreatedWaiting && (
+            <div className="p-3 bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-950 rounded-2xl border-2 border-emerald-500/80 shadow-2xl flex flex-col gap-2 text-center animate-fadeIn">
+              <div className="flex items-center justify-center gap-2 text-emerald-300 font-black text-xs uppercase">
+                <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+                <span>BÀN CƯỢC CỦA BẠN ĐANG TREO CÔNG KHAI TRÊN SẢNH</span>
+              </div>
+              <p className="text-[11px] text-slate-300">
+                Mức cược: <strong className="text-amber-300">{customWager.toLocaleString('vi-VN')} Xu</strong> • Thể thức: <strong className="text-emerald-300">{customMode === 'QUICK' ? '1 Hiệp' : customMode}</strong>
+              </p>
+              <p className="text-[10px] text-slate-400 italic">
+                🔴 Đang chờ người chơi thật khác nhận kèo... Không tự động xếp bot nữa!
+              </p>
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={handleCancelMyRoom}
+                  className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-bold transition-all cursor-pointer"
+                >
+                  ❌ Hủy Mở Bàn
+                </button>
+                <button
+                  type="button"
+                  onClick={handleForceMatchBot}
+                  className="px-4 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400 text-amber-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <span>🤖 Chơi Ngay Với Bot AI</span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* DANH SÁCH BÀN THÁCH ĐẤU ĐANG CHỜ TRỰC TUYẾN */}
           <div className="flex flex-col gap-1.5">

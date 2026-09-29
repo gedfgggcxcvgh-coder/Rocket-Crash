@@ -597,6 +597,8 @@ async function startServer() {
           highestMultiplier: 0,
           totalWagered: 0,
           rankExp: 1000,
+          rankStars: 5,
+          protectionPoints: 0,
           rankLevel: 1,
           rankTier: 'BRONZE',
         },
@@ -616,14 +618,15 @@ async function startServer() {
         highestMultiplier: 0,
         totalWagered: 0,
         rankExp: 1000,
+        rankStars: 5,
+        protectionPoints: 0,
         rankLevel: 1,
         rankTier: 'BRONZE',
       };
     }
-    if (typeof userDatabase[userId].stats.rankExp !== 'number') {
-      const wag = userDatabase[userId].stats.totalWagered || 0;
-      const prof = Math.max(0, userDatabase[userId].stats.totalProfit || 0);
-      userDatabase[userId].stats.rankExp = Math.max(1000, Math.floor(wag / 1000) + Math.floor(prof / 500));
+    if (typeof userDatabase[userId].stats.rankStars !== 'number') {
+      const expVal = userDatabase[userId].stats.rankExp || 1000;
+      userDatabase[userId].stats.rankStars = Math.max(1, Math.floor(expVal / 1000));
     }
     if (!userDatabase[userId].equippedSkin) {
       userDatabase[userId].equippedSkin = 'STANDARD';

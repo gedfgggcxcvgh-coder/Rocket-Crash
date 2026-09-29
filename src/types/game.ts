@@ -68,6 +68,8 @@ export interface UserStats {
   unlockedSkins?: RocketSkinId[];
   vipTitle?: string;
   rankExp?: number;
+  rankStars?: number;
+  protectionPoints?: number;
   rankLevel?: number;
   rankTier?: RankTierId;
   rocketGames?: number;

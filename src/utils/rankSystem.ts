@@ -5,12 +5,11 @@ export interface CalculatedRank {
   tierName: string;
   division: string;
   level: number;
-  currentExp: number;
-  minExp: number;
-  maxExp: number;
-  expInLevel: number;
-  expNeededInLevel: number;
+  totalStars: number;
+  starsInDivision: number;
+  starsNeededInDivision: number;
   progressPercent: number;
+  starsVisual: string;
   icon: string;
   color: string;
   badgeBg: string;
@@ -19,20 +18,39 @@ export interface CalculatedRank {
   title: string;
   perkBonusPercent: number;
   dailyBonusAmount: number;
+  protectionPoints: number; // 0 - 100 (Điểm bảo hiểm rank)
 }
 
-export const RANK_TIERS_CONFIG: RankTierInfo[] = [
+export interface StarRankConfig {
+  id: RankTierId;
+  name: string;
+  division: string;
+  level: number;
+  minStars: number;
+  maxStars: number;
+  starsInRank: number;
+  icon: string;
+  color: string;
+  badgeBg: string;
+  border: string;
+  title: string;
+  perkBonusPercent: number;
+}
+
+export const STAR_RANK_CONFIGS: StarRankConfig[] = [
+  // 🥉 ĐỒNG (Bronze) - 3 Hạng, 3 Sao / Hạng
   {
     id: 'BRONZE',
     name: 'Đồng',
-    division: 'I',
+    division: 'III',
     level: 1,
-    minExp: 0,
-    maxExp: 5000,
+    minStars: 0,
+    maxStars: 2,
+    starsInRank: 3,
     icon: '🥉',
     color: 'text-amber-600',
-    badgeBg: 'bg-amber-800/30 text-amber-500 border border-amber-700/50',
-    border: 'border-amber-700/60',
+    badgeBg: 'bg-amber-900/40 text-amber-500 border border-amber-700/60',
+    border: 'border-amber-700',
     title: 'Tân Binh Vũ Trụ',
     perkBonusPercent: 0,
   },
@@ -41,40 +59,45 @@ export const RANK_TIERS_CONFIG: RankTierInfo[] = [
     name: 'Đồng',
     division: 'II',
     level: 2,
-    minExp: 5000,
-    maxExp: 15000,
+    minStars: 3,
+    maxStars: 5,
+    starsInRank: 3,
     icon: '🥉',
     color: 'text-amber-600',
-    badgeBg: 'bg-amber-800/30 text-amber-500 border border-amber-700/50',
-    border: 'border-amber-700/60',
+    badgeBg: 'bg-amber-900/40 text-amber-500 border border-amber-700/60',
+    border: 'border-amber-700',
     title: 'Tân Binh Lão Luyện',
     perkBonusPercent: 5,
   },
   {
     id: 'BRONZE',
     name: 'Đồng',
-    division: 'III',
+    division: 'I',
     level: 3,
-    minExp: 15000,
-    maxExp: 30000,
+    minStars: 6,
+    maxStars: 8,
+    starsInRank: 3,
     icon: '🥉',
     color: 'text-amber-600',
-    badgeBg: 'bg-amber-800/30 text-amber-500 border border-amber-700/50',
-    border: 'border-amber-700/60',
+    badgeBg: 'bg-amber-900/40 text-amber-500 border border-amber-700/60',
+    border: 'border-amber-700',
     title: 'Phi Công Tập Sự',
     perkBonusPercent: 10,
   },
+
+  // 🥈 BẠC (Silver) - 3 Hạng, 3 Sao / Hạng
   {
     id: 'SILVER',
     name: 'Bạc',
-    division: 'I',
+    division: 'III',
     level: 4,
-    minExp: 30000,
-    maxExp: 50000,
+    minStars: 9,
+    maxStars: 11,
+    starsInRank: 3,
     icon: '🥈',
     color: 'text-slate-300',
-    badgeBg: 'bg-slate-700/40 text-slate-200 border border-slate-500/50',
-    border: 'border-slate-400/60',
+    badgeBg: 'bg-slate-800/60 text-slate-200 border border-slate-500/60',
+    border: 'border-slate-400',
     title: 'Thợ Săn Tên Lửa',
     perkBonusPercent: 15,
   },
@@ -83,39 +106,44 @@ export const RANK_TIERS_CONFIG: RankTierInfo[] = [
     name: 'Bạc',
     division: 'II',
     level: 5,
-    minExp: 50000,
-    maxExp: 80000,
+    minStars: 12,
+    maxStars: 14,
+    starsInRank: 3,
     icon: '🥈',
     color: 'text-slate-300',
-    badgeBg: 'bg-slate-700/40 text-slate-200 border border-slate-500/50',
-    border: 'border-slate-400/60',
+    badgeBg: 'bg-slate-800/60 text-slate-200 border border-slate-500/60',
+    border: 'border-slate-400',
     title: 'Bậc Thầy Lắc Bát',
     perkBonusPercent: 20,
   },
   {
     id: 'SILVER',
     name: 'Bạc',
-    division: 'III',
+    division: 'I',
     level: 6,
-    minExp: 80000,
-    maxExp: 120000,
+    minStars: 15,
+    maxStars: 17,
+    starsInRank: 3,
     icon: '🥈',
     color: 'text-slate-300',
-    badgeBg: 'bg-slate-700/40 text-slate-200 border border-slate-500/50',
-    border: 'border-slate-400/60',
+    badgeBg: 'bg-slate-800/60 text-slate-200 border border-slate-500/60',
+    border: 'border-slate-400',
     title: 'Cao Thủ Cầu Kèo',
     perkBonusPercent: 25,
   },
+
+  // 🥇 VÀNG (Gold) - 4 Hạng, 4 Sao / Hạng
   {
     id: 'GOLD',
     name: 'Vàng',
-    division: 'I',
+    division: 'IV',
     level: 7,
-    minExp: 120000,
-    maxExp: 180000,
+    minStars: 18,
+    maxStars: 21,
+    starsInRank: 4,
     icon: '🥇',
     color: 'text-amber-400',
-    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20',
+    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/60 shadow-amber-500/20',
     border: 'border-amber-400',
     title: 'Bậc Thầy Chốt Lời',
     perkBonusPercent: 30,
@@ -123,13 +151,14 @@ export const RANK_TIERS_CONFIG: RankTierInfo[] = [
   {
     id: 'GOLD',
     name: 'Vàng',
-    division: 'II',
+    division: 'III',
     level: 8,
-    minExp: 180000,
-    maxExp: 260000,
+    minStars: 22,
+    maxStars: 25,
+    starsInRank: 4,
     icon: '🥇',
     color: 'text-amber-400',
-    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20',
+    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/60 shadow-amber-500/20',
     border: 'border-amber-400',
     title: 'Đại Gia Sàn Đấu',
     perkBonusPercent: 35,
@@ -137,127 +166,242 @@ export const RANK_TIERS_CONFIG: RankTierInfo[] = [
   {
     id: 'GOLD',
     name: 'Vàng',
-    division: 'III',
+    division: 'II',
     level: 9,
-    minExp: 260000,
-    maxExp: 360000,
+    minStars: 26,
+    maxStars: 29,
+    starsInRank: 4,
     icon: '🥇',
     color: 'text-amber-400',
-    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/50 shadow-sm shadow-amber-500/20',
+    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/60 shadow-amber-500/20',
     border: 'border-amber-400',
     title: 'Thần Tài Gõ Cửa',
     perkBonusPercent: 40,
   },
   {
+    id: 'GOLD',
+    name: 'Vàng',
+    division: 'I',
+    level: 10,
+    minStars: 30,
+    maxStars: 33,
+    starsInRank: 4,
+    icon: '🥇',
+    color: 'text-amber-400',
+    badgeBg: 'bg-amber-500/20 text-amber-300 border border-amber-500/60 shadow-amber-500/20',
+    border: 'border-amber-400',
+    title: 'Vua Bát Vàng 👑',
+    perkBonusPercent: 45,
+  },
+
+  // 💠 BẠCH KIM (Platinum) - 4 Hạng, 4 Sao / Hạng
+  {
     id: 'PLATINUM',
     name: 'Bạch Kim',
-    division: 'VIP',
-    level: 10,
-    minExp: 360000,
-    maxExp: 550000,
+    division: 'IV',
+    level: 11,
+    minStars: 34,
+    maxStars: 37,
+    starsInRank: 4,
     icon: '💠',
     color: 'text-cyan-400',
-    badgeBg: 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/50 shadow-md shadow-cyan-500/20',
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 shadow-cyan-500/20',
     border: 'border-cyan-400',
     title: 'Chiến Hạm Bất Bại',
-    perkBonusPercent: 50,
+    perkBonusPercent: 55,
+  },
+  {
+    id: 'PLATINUM',
+    name: 'Bạch Kim',
+    division: 'III',
+    level: 12,
+    minStars: 38,
+    maxStars: 41,
+    starsInRank: 4,
+    icon: '💠',
+    color: 'text-cyan-400',
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 shadow-cyan-500/20',
+    border: 'border-cyan-400',
+    title: 'Siêu Cấp Thắng Cầu',
+    perkBonusPercent: 60,
+  },
+  {
+    id: 'PLATINUM',
+    name: 'Bạch Kim',
+    division: 'II',
+    level: 13,
+    minStars: 42,
+    maxStars: 45,
+    starsInRank: 4,
+    icon: '💠',
+    color: 'text-cyan-400',
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 shadow-cyan-500/20',
+    border: 'border-cyan-400',
+    title: 'Thánh Bẻ Cầu Bệt',
+    perkBonusPercent: 65,
+  },
+  {
+    id: 'PLATINUM',
+    name: 'Bạch Kim',
+    division: 'I',
+    level: 14,
+    minStars: 46,
+    maxStars: 49,
+    starsInRank: 4,
+    icon: '💠',
+    color: 'text-cyan-400',
+    badgeBg: 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/60 shadow-cyan-500/20',
+    border: 'border-cyan-400',
+    title: 'Bạch Kim Huyền Thoại 💠✨',
+    perkBonusPercent: 70,
+  },
+
+  // 💎 KIM CƯƠNG (Diamond) - 5 Hạng, 5 Sao / Hạng
+  {
+    id: 'DIAMOND',
+    name: 'Kim Cương',
+    division: 'V',
+    level: 15,
+    minStars: 50,
+    maxStars: 54,
+    starsInRank: 5,
+    icon: '💎',
+    color: 'text-purple-400',
+    badgeBg: 'bg-purple-500/25 text-purple-300 border border-purple-400/70 shadow-purple-500/30',
+    border: 'border-purple-400',
+    title: 'Gồng Thủ Kim Cương',
+    perkBonusPercent: 80,
   },
   {
     id: 'DIAMOND',
     name: 'Kim Cương',
-    division: 'VIP',
-    level: 11,
-    minExp: 550000,
-    maxExp: 1000000,
+    division: 'I',
+    level: 16,
+    minStars: 55,
+    maxStars: 74,
+    starsInRank: 5,
     icon: '💎',
     color: 'text-purple-400',
-    badgeBg: 'bg-purple-500/25 text-purple-300 border border-purple-400/60 shadow-lg shadow-purple-500/30',
+    badgeBg: 'bg-purple-500/25 text-purple-300 border border-purple-400/70 shadow-purple-500/30',
     border: 'border-purple-400',
-    title: 'Gồng Thủ Kim Cương',
-    perkBonusPercent: 70,
+    title: 'Đỉnh Phong Kim Cương 💎✨',
+    perkBonusPercent: 90,
   },
+
+  // 👑 CAO THỦ (Master)
   {
     id: 'MASTER',
     name: 'Cao Thủ',
     division: 'PRO',
-    level: 12,
-    minExp: 1000000,
-    maxExp: 2000000,
+    level: 17,
+    minStars: 75,
+    maxStars: 124,
+    starsInRank: 50,
     icon: '👑',
     color: 'text-rose-400',
-    badgeBg: 'bg-rose-500/25 text-rose-300 border border-rose-400/60 shadow-lg shadow-rose-500/30 ring-1 ring-rose-400/40',
+    badgeBg: 'bg-rose-500/25 text-rose-300 border border-rose-400/80 shadow-rose-500/40 ring-1 ring-rose-400/50',
     border: 'border-rose-400',
-    title: 'Chiến Thần Vũ Trụ',
-    perkBonusPercent: 100,
+    title: 'Chiến Thần Vũ Trụ 👑',
+    perkBonusPercent: 120,
   },
+
+  // 🏆 THÁCH ĐẤU (Legend)
   {
     id: 'LEGEND',
-    name: 'Đại Cao Thủ',
-    division: 'MYTHIC',
-    level: 13,
-    minExp: 2000000,
-    maxExp: 5000000,
+    name: 'Thách Đấu',
+    division: 'TOP 50',
+    level: 18,
+    minStars: 125,
+    maxStars: 99999,
+    starsInRank: 999,
     icon: '🌌',
     color: 'text-yellow-300',
-    badgeBg: 'bg-gradient-to-r from-amber-500/30 via-yellow-400/30 to-amber-500/30 text-yellow-200 border border-yellow-300/80 shadow-xl shadow-yellow-500/40 ring-1 ring-yellow-400/50 animate-pulse',
+    badgeBg: 'bg-gradient-to-r from-amber-500/30 via-yellow-400/30 to-amber-500/30 text-yellow-200 border border-yellow-300/90 shadow-yellow-500/50 ring-1 ring-yellow-400/60 animate-pulse',
     border: 'border-yellow-300',
     title: 'Thần Bài Vũ Trụ 👑✨',
-    perkBonusPercent: 150,
+    perkBonusPercent: 180,
   },
 ];
 
-export function calculateRankFromExp(exp: number): CalculatedRank {
-  const currentExp = Math.max(0, Math.floor(exp || 0));
+// Main 5v5 MOBA Star Rank Calculator
+export function calculateRankFromStars(stars: number, protectionPoints: number = 0): CalculatedRank {
+  const totalStars = Math.max(0, Math.floor(stars || 0));
 
-  let matchedConfig = RANK_TIERS_CONFIG[0];
-  for (let i = 0; i < RANK_TIERS_CONFIG.length; i++) {
-    const config = RANK_TIERS_CONFIG[i];
-    if (currentExp >= config.minExp) {
-      matchedConfig = config;
+  let matched = STAR_RANK_CONFIGS[0];
+  for (let i = 0; i < STAR_RANK_CONFIGS.length; i++) {
+    if (totalStars >= STAR_RANK_CONFIGS[i].minStars) {
+      matched = STAR_RANK_CONFIGS[i];
     } else {
       break;
     }
   }
 
-  const isMaxTier = matchedConfig.level === RANK_TIERS_CONFIG[RANK_TIERS_CONFIG.length - 1].level;
-  const expInLevel = currentExp - matchedConfig.minExp;
-  const expNeededInLevel = isMaxTier ? matchedConfig.maxExp - matchedConfig.minExp : matchedConfig.maxExp - matchedConfig.minExp;
-  const progressPercent = isMaxTier && currentExp >= matchedConfig.maxExp
-    ? 100
-    : Math.min(100, Math.max(0, Math.floor((expInLevel / expNeededInLevel) * 100)));
+  const isMasterOrLegend = matched.id === 'MASTER' || matched.id === 'LEGEND';
+  const starsInDivision = isMasterOrLegend
+    ? totalStars - matched.minStars
+    : totalStars - matched.minStars;
 
-  const dailyBonusAmount = 500000 + (500000 * (matchedConfig.perkBonusPercent / 100));
+  const starsNeededInDivision = matched.starsInRank;
+
+  // Build star visual representation (e.g. ⭐⭐⭐☆☆ or ⭐x15)
+  let starsVisual = '';
+  if (isMasterOrLegend) {
+    starsVisual = `⭐x${starsInDivision}`;
+  } else {
+    const filled = Math.min(starsNeededInDivision, Math.max(0, starsInDivision));
+    const empty = Math.max(0, starsNeededInDivision - filled);
+    starsVisual = '⭐'.repeat(filled) + '☆'.repeat(empty);
+  }
+
+  const progressPercent = isMasterOrLegend
+    ? 100
+    : Math.min(100, Math.max(0, Math.floor((starsInDivision / starsNeededInDivision) * 100)));
+
+  const dailyBonusAmount = 500000 + 500000 * (matched.perkBonusPercent / 100);
 
   let glow = 'shadow-slate-800';
-  if (matchedConfig.id === 'GOLD') glow = 'shadow-amber-500/20';
-  if (matchedConfig.id === 'PLATINUM') glow = 'shadow-cyan-500/25';
-  if (matchedConfig.id === 'DIAMOND') glow = 'shadow-purple-500/30';
-  if (matchedConfig.id === 'MASTER') glow = 'shadow-rose-500/40';
-  if (matchedConfig.id === 'LEGEND') glow = 'shadow-yellow-500/50';
+  if (matched.id === 'GOLD') glow = 'shadow-amber-500/30';
+  if (matched.id === 'PLATINUM') glow = 'shadow-cyan-500/30';
+  if (matched.id === 'DIAMOND') glow = 'shadow-purple-500/40';
+  if (matched.id === 'MASTER') glow = 'shadow-rose-500/50';
+  if (matched.id === 'LEGEND') glow = 'shadow-yellow-500/60';
 
   return {
-    tierId: matchedConfig.id,
-    tierName: matchedConfig.name,
-    division: matchedConfig.division,
-    level: matchedConfig.level,
-    currentExp,
-    minExp: matchedConfig.minExp,
-    maxExp: matchedConfig.maxExp,
-    expInLevel,
-    expNeededInLevel,
+    tierId: matched.id,
+    tierName: matched.name,
+    division: matched.division,
+    level: matched.level,
+    totalStars,
+    starsInDivision,
+    starsNeededInDivision,
     progressPercent,
-    icon: matchedConfig.icon,
-    color: matchedConfig.color,
-    badgeBg: matchedConfig.badgeBg,
-    border: matchedConfig.border,
+    starsVisual,
+    icon: matched.icon,
+    color: matched.color,
+    badgeBg: matched.badgeBg,
+    border: matched.border,
     glow,
-    title: matchedConfig.title,
-    perkBonusPercent: matchedConfig.perkBonusPercent,
+    title: matched.title,
+    perkBonusPercent: matched.perkBonusPercent,
     dailyBonusAmount,
+    protectionPoints: Math.min(100, Math.max(0, protectionPoints)),
   };
 }
 
-// EXP calculations across BOTH games
+export function calculateRankFromUserStats(stats: Partial<{ rankStars?: number; rankExp?: number; protectionPoints?: number }>): CalculatedRank {
+  const stars = typeof stats?.rankStars === 'number'
+    ? stats.rankStars
+    : Math.floor((stats?.rankExp || 1000) / 1000);
+  const prot = stats?.protectionPoints || 0;
+  return calculateRankFromStars(stars, prot);
+}
+
+// Backward compatibility helpers
+export function calculateRankFromExp(exp: number, protectionPoints: number = 0): CalculatedRank {
+  const stars = Math.floor((exp || 1000) / 1000);
+  return calculateRankFromStars(stars, protectionPoints);
+}
+
 export function calcRocketBetExp(betAmount: number): number {
   return Math.max(1, Math.floor(betAmount / 1000));
 }
@@ -277,10 +421,64 @@ export function calcComCutBetExp(betAmount: number): number {
 
 export function calcComCutWinExp(winAmount: number, isBao: boolean): number {
   let exp = Math.max(1, Math.floor(winAmount / 500));
-  if (isBao) exp += 2000; // Bonus massive EXP for hitting Triple/Bão
+  if (isBao) exp += 2000;
   return exp;
 }
 
 export function calcDuelWinExp(wager: number): number {
   return 500 + Math.floor(wager / 2000);
+}
+
+// MOBA Star Earn / Lose Logic
+export function processStarResult(
+  currentStars: number,
+  isWin: boolean,
+  streakCount: number = 0,
+  isBigWin: boolean = false,
+  protectionPoints: number = 0
+): { nextStars: number; nextProtection: number; starChange: number; protectionUsed: boolean; promoted: boolean } {
+  let stars = Math.max(0, currentStars || 0);
+  let prot = Math.min(100, Math.max(0, protectionPoints || 0));
+  let change = 0;
+  let protectionUsed = false;
+
+  const oldRank = calculateRankFromStars(stars, prot);
+
+  if (isWin) {
+    let earned = 1;
+    // Win streak bonus
+    if (streakCount >= 3) earned += 1;
+    // Big win bonus (e.g., 10x or Bão)
+    if (isBigWin) earned += 1;
+
+    stars += earned;
+    change = earned;
+    prot = Math.min(100, prot + 15); // Add protection points on win
+  } else {
+    // Loss
+    if (prot >= 100) {
+      // Protection active! Keep stars, consume protection points
+      prot = 0;
+      protectionUsed = true;
+      change = 0;
+    } else {
+      // Lose 1 star, unless at 0 stars in Bronze III
+      if (stars > 0) {
+        stars -= 1;
+        change = -1;
+      }
+      prot = Math.min(100, prot + 5);
+    }
+  }
+
+  const newRank = calculateRankFromStars(stars, prot);
+  const promoted = newRank.level > oldRank.level;
+
+  return {
+    nextStars: stars,
+    nextProtection: prot,
+    starChange: change,
+    protectionUsed,
+    promoted,
+  };
 }

@@ -27,7 +27,7 @@ import { ComVaCutGame } from './components/ComVaCutGame';
 import { GameHubModal } from './components/GameHubModal';
 import { RocketSkin, RocketSkinId, DuelState, UnifiedLeaderboardItem } from './types/game';
 import { getSkinById } from './utils/skins';
-import { calculateRankFromExp, calcRocketBetExp, calcRocketCashoutExp, calcComCutBetExp, calcComCutWinExp, calcDuelWinExp } from './utils/rankSystem';
+import { calculateRankFromUserStats, processStarResult, calculateRankFromExp, calcRocketBetExp, calcRocketCashoutExp, calcComCutBetExp, calcComCutWinExp, calcDuelWinExp } from './utils/rankSystem';
 import confetti from 'canvas-confetti';
 import { Volume2, VolumeX, Coins, Menu, X, Sparkles, Trophy, Swords, HelpCircle, ShieldCheck, BarChart2, Award } from 'lucide-react';
 
@@ -140,6 +140,7 @@ export default function App() {
     return savedGuest ? parseInt(savedGuest, 10) : INITIAL_BALANCE;
   });
   const [userBet, setUserBet] = useState<number>(0);
+  const [queuedBet, setQueuedBet] = useState<number>(0);
   const [userCashedOut, setUserCashedOut] = useState<boolean>(false);
   const [userCashoutMultiplier, setUserCashoutMultiplier] = useState<number | undefined>(undefined);
   const [autoCashoutEnabled, setAutoCashoutEnabled] = useState<boolean>(false);
@@ -156,6 +157,7 @@ export default function App() {
 
   // Dual Bet 2 (Gồng Đỉnh)
   const [userBet2, setUserBet2] = useState<number>(0);
+  const [queuedBet2, setQueuedBet2] = useState<number>(0);
   const [userCashedOut2, setUserCashedOut2] = useState<boolean>(false);
   const [userCashoutMultiplier2, setUserCashoutMultiplier2] = useState<number | undefined>(undefined);
   const [autoCashoutEnabled2, setAutoCashoutEnabled2] = useState<boolean>(false);
@@ -214,7 +216,7 @@ export default function App() {
   });
 
   const currentUserId = discordUser ? discordUser.id : getGuestUserId();
-  const currentRank = calculateRankFromExp(stats.rankExp || 1000);
+  const currentRank = calculateRankFromUserStats(stats);
 
   // On startup & account change: Fetch fresh account balance, stats and skins from central server
   useEffect(() => {
@@ -665,20 +667,40 @@ export default function App() {
                 activeEventRef.current = null;
                 if ((userBet > 0 && !userCashedOut) || (userBet2 > 0 && !userCashedOut2)) {
                   const lostAmt = (userCashedOut ? 0 : userBet) + (userCashedOut2 ? 0 : userBet2);
-                  setStats(prev => ({
-                    ...prev,
-                    totalGames: prev.totalGames + 1,
-                    rocketGames: (prev.rocketGames || 0) + 1,
-                    losses: prev.losses + 1,
-                    totalProfit: prev.totalProfit - lostAmt,
-                    rocketProfit: (prev.rocketProfit || 0) - lostAmt,
-                  }));
+                  setStats(prev => {
+                    const starRes = processStarResult(prev.rankStars || 5, false, 0, false, prev.protectionPoints || 0);
+                    const rankInfo = calculateRankFromUserStats({ rankStars: starRes.nextStars, protectionPoints: starRes.nextProtection });
+                    return {
+                      ...prev,
+                      totalGames: prev.totalGames + 1,
+                      rocketGames: (prev.rocketGames || 0) + 1,
+                      losses: prev.losses + 1,
+                      totalProfit: prev.totalProfit - lostAmt,
+                      rocketProfit: (prev.rocketProfit || 0) - lostAmt,
+                      rankStars: starRes.nextStars,
+                      protectionPoints: starRes.nextProtection,
+                      rankLevel: rankInfo.level,
+                      rankTier: rankInfo.tierId,
+                    };
+                  });
                 }
               } else if (data.status === 'COUNTDOWN') {
                 sounds.playCountdownBeep(false);
                 plannedEventRef.current = null;
                 setActiveEvent(null);
                 activeEventRef.current = null;
+
+                // Auto-submit queued next round bets when countdown starts
+                if (queuedNextBetRef.current > 0) {
+                  const betAmt = queuedNextBetRef.current;
+                  queuedNextBetRef.current = 0;
+                  setTimeout(() => handlePlaceBet(betAmt), 100);
+                }
+                if (queuedNextBet2Ref.current > 0) {
+                  const betAmt2 = queuedNextBet2Ref.current;
+                  queuedNextBet2Ref.current = 0;
+                  setTimeout(() => handlePlaceBet2(betAmt2), 150);
+                }
               }
               prevPhaseRef.current = data.status;
             }
@@ -705,6 +727,10 @@ export default function App() {
     };
   }, [discordUser?.id, userCashedOut]);
 
+  // Queued bet for next round when user bets while rocket is flying
+  const queuedNextBetRef = useRef<number>(0);
+  const queuedNextBet2Ref = useRef<number>(0);
+
   // Smooth 60 FPS flight multiplier interpolation
   useEffect(() => {
     if (phase !== 'FLYING') return;
@@ -714,7 +740,7 @@ export default function App() {
       if (flightStartTimeMsRef.current > 0) {
         const elapsedSec = (Date.now() - flightStartTimeMsRef.current) / 1000;
         const currentMult = parseFloat(Math.max(1.00, Math.pow(Math.E, 0.06 * elapsedSec)).toFixed(2));
-        const finalMult = Math.min(currentMult, crashPoint);
+        const finalMult = currentMult; // Keep flying smoothly without freezing before server crash signal
         setMultiplier(prev => (finalMult > prev ? finalMult : prev));
 
         // Auto Cashout for Bet 1
@@ -1151,13 +1177,13 @@ export default function App() {
         sounds.playClaimReward();
         confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
         setStats(prev => {
-          const addedExp = calcDuelWinExp(activeDuel.wager);
-          const nextExp = (prev.rankExp || 1000) + addedExp;
-          const rankInfo = calculateRankFromExp(nextExp);
+          const starRes = processStarResult(prev.rankStars || 5, true, 0, true, prev.protectionPoints || 0);
+          const rankInfo = calculateRankFromUserStats({ rankStars: starRes.nextStars, protectionPoints: starRes.nextProtection });
           return {
             ...prev,
             duelWins: (prev.duelWins || 0) + 1,
-            rankExp: nextExp,
+            rankStars: starRes.nextStars,
+            protectionPoints: starRes.nextProtection,
             rankLevel: rankInfo.level,
             rankTier: rankInfo.tierId,
           };
@@ -1202,8 +1228,25 @@ export default function App() {
   const handlePlaceBet = async (amount: number) => {
     if (amount <= 0 || amount > balance) return;
     sounds.playClick();
-    setUserBet(amount);
 
+    if (phase !== 'COUNTDOWN') {
+      queuedNextBetRef.current = amount;
+      setQueuedBet(amount);
+      setMessages(prev => [
+        ...prev.slice(-30),
+        {
+          id: `queue_${Date.now()}`,
+          user: 'Hệ Thống',
+          avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=System',
+          text: `⏳ Đã xếp hàng đặt trước ${amount.toLocaleString('vi-VN')} Xu cho ván tiếp theo!`,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          isSystem: true,
+        },
+      ]);
+      return;
+    }
+
+    setUserBet(amount);
     const userId = currentUserId;
     const username = discordUser ? (discordUser.globalName || discordUser.username) : 'Khách';
     const avatar = discordUser ? discordUser.avatar : 'https://api.dicebear.com/7.x/bottts/svg?seed=Guest';
@@ -1223,8 +1266,20 @@ export default function App() {
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || 'Đặt cược thất bại.');
         setUserBet(0);
+        queuedNextBetRef.current = amount;
+        setQueuedBet(amount);
+        setMessages(prev => [
+          ...prev.slice(-30),
+          {
+            id: `queue_${Date.now()}`,
+            user: 'Hệ Thống',
+            avatar: 'https://api.dicebear.com/7.x/bottts/svg?seed=System',
+            text: `⏳ Đã xếp hàng đặt trước ${amount.toLocaleString('vi-VN')} Xu cho ván tiếp theo!`,
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isSystem: true,
+          },
+        ]);
         return;
       }
 
@@ -1234,20 +1289,13 @@ export default function App() {
         setBalance(prev => prev - amount);
       }
 
-      setStats(prev => {
-        const addedExp = calcRocketBetExp(amount);
-        const nextExp = (prev.rankExp || 1000) + addedExp;
-        const rankInfo = calculateRankFromExp(nextExp);
-        return {
-          ...prev,
-          totalWagered: prev.totalWagered + amount,
-          rankExp: nextExp,
-          rankLevel: rankInfo.level,
-          rankTier: rankInfo.tierId,
-        };
-      });
+      setStats(prev => ({
+        ...prev,
+        totalWagered: prev.totalWagered + amount,
+      }));
     } catch (err) {
       console.error('Bet API error:', err);
+      setUserBet(0);
     }
   };
 
@@ -1255,6 +1303,13 @@ export default function App() {
   const handlePlaceBet2 = async (amount: number) => {
     if (amount <= 0 || amount > balance) return;
     sounds.playClick();
+
+    if (phase !== 'COUNTDOWN') {
+      queuedNextBet2Ref.current = amount;
+      setQueuedBet2(amount);
+      return;
+    }
+
     setUserBet2(amount);
 
     const userId = `${currentUserId}_bet2`;
@@ -1276,8 +1331,9 @@ export default function App() {
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || 'Đặt cược 2 thất bại.');
         setUserBet2(0);
+        queuedNextBet2Ref.current = amount;
+        setQueuedBet2(amount);
         return;
       }
 
@@ -1286,37 +1342,40 @@ export default function App() {
       } else {
         setBalance(prev => prev - amount);
       }
-      setStats(prev => {
-        const addedExp = calcRocketBetExp(amount);
-        const nextExp = (prev.rankExp || 1000) + addedExp;
-        const rankInfo = calculateRankFromExp(nextExp);
-        return {
-          ...prev,
-          totalWagered: prev.totalWagered + amount,
-          rankExp: nextExp,
-          rankLevel: rankInfo.level,
-          rankTier: rankInfo.tierId,
-        };
-      });
+      setStats(prev => ({
+        ...prev,
+        totalWagered: prev.totalWagered + amount,
+      }));
     } catch (err) {
       console.error('Bet2 API error:', err);
+      setUserBet2(0);
     }
   };
 
-  // Cancel Bet 1 during COUNTDOWN
+  // Cancel Bet 1
   const handleCancelBet = () => {
-    if (userBet <= 0 || phase !== 'COUNTDOWN') return;
     sounds.playClick();
-    setBalance(prev => prev + userBet);
-    setUserBet(0);
+    if (phase === 'COUNTDOWN' && userBet > 0) {
+      setBalance(prev => prev + userBet);
+      setUserBet(0);
+    }
+    if (queuedBet > 0) {
+      setQueuedBet(0);
+      queuedNextBetRef.current = 0;
+    }
   };
 
-  // Cancel Bet 2 during COUNTDOWN
+  // Cancel Bet 2
   const handleCancelBet2 = () => {
-    if (userBet2 <= 0 || phase !== 'COUNTDOWN') return;
     sounds.playClick();
-    setBalance(prev => prev + userBet2);
-    setUserBet2(0);
+    if (phase === 'COUNTDOWN' && userBet2 > 0) {
+      setBalance(prev => prev + userBet2);
+      setUserBet2(0);
+    }
+    if (queuedBet2 > 0) {
+      setQueuedBet2(0);
+      queuedNextBet2Ref.current = 0;
+    }
   };
 
   // Manual Cashout Bet 1 - Instant 0ms response
@@ -1336,9 +1395,8 @@ export default function App() {
 
     const netProfit = winAmount - userBet;
     setStats(prev => {
-      const addedExp = calcRocketCashoutExp(winAmount, cashoutMult);
-      const nextExp = (prev.rankExp || 1000) + addedExp;
-      const rankInfo = calculateRankFromExp(nextExp);
+      const starRes = processStarResult(prev.rankStars || 5, true, 0, cashoutMult >= 5.0, prev.protectionPoints || 0);
+      const rankInfo = calculateRankFromUserStats({ rankStars: starRes.nextStars, protectionPoints: starRes.nextProtection });
       return {
         ...prev,
         totalGames: prev.totalGames + 1,
@@ -1348,7 +1406,8 @@ export default function App() {
         totalProfit: prev.totalProfit + netProfit,
         rocketProfit: (prev.rocketProfit || 0) + netProfit,
         highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
-        rankExp: nextExp,
+        rankStars: starRes.nextStars,
+        protectionPoints: starRes.nextProtection,
         rankLevel: rankInfo.level,
         rankTier: rankInfo.tierId,
       };
@@ -1410,9 +1469,8 @@ export default function App() {
 
     const netProfit = winAmt - userBet2;
     setStats(prev => {
-      const addedExp = calcRocketCashoutExp(winAmt, cashoutMult);
-      const nextExp = (prev.rankExp || 1000) + addedExp;
-      const rankInfo = calculateRankFromExp(nextExp);
+      const starRes = processStarResult(prev.rankStars || 5, true, 0, cashoutMult >= 5.0, prev.protectionPoints || 0);
+      const rankInfo = calculateRankFromUserStats({ rankStars: starRes.nextStars, protectionPoints: starRes.nextProtection });
       return {
         ...prev,
         totalGames: prev.totalGames + 1,
@@ -1422,7 +1480,8 @@ export default function App() {
         totalProfit: prev.totalProfit + netProfit,
         rocketProfit: (prev.rocketProfit || 0) + netProfit,
         highestMultiplier: Math.max(prev.highestMultiplier, cashoutMult),
-        rankExp: nextExp,
+        rankStars: starRes.nextStars,
+        protectionPoints: starRes.nextProtection,
         rankLevel: rankInfo.level,
         rankTier: rankInfo.tierId,
       };
@@ -1680,9 +1739,8 @@ export default function App() {
     const netProfit = winTotal - betTotal;
 
     setStats(prev => {
-      const addedExp = isWin ? calcComCutWinExp(winTotal, isBao) : 0;
-      const nextExp = (prev.rankExp || 1000) + addedExp;
-      const rankInfo = calculateRankFromExp(nextExp);
+      const starRes = processStarResult(prev.rankStars || 5, isWin, 0, isBao, prev.protectionPoints || 0);
+      const rankInfo = calculateRankFromUserStats({ rankStars: starRes.nextStars, protectionPoints: starRes.nextProtection });
 
       return {
         ...prev,
@@ -1694,7 +1752,8 @@ export default function App() {
         comCutBaoWins: (isWin && isBao) ? (prev.comCutBaoWins || 0) + 1 : (prev.comCutBaoWins || 0),
         totalProfit: prev.totalProfit + netProfit,
         comCutProfit: (prev.comCutProfit || 0) + netProfit,
-        rankExp: nextExp,
+        rankStars: starRes.nextStars,
+        protectionPoints: starRes.nextProtection,
         rankLevel: rankInfo.level,
         rankTier: rankInfo.tierId,
       };
@@ -2164,6 +2223,7 @@ export default function App() {
                 balance={balance}
                 currentMultiplier={multiplier}
                 userBet1={userBet}
+                queuedBet1={queuedBet}
                 userCashedOut1={userCashedOut}
                 userCashoutMultiplier1={userCashoutMultiplier}
                 autoCashoutEnabled1={autoCashoutEnabled}
@@ -2174,6 +2234,7 @@ export default function App() {
                 onCancelBet1={handleCancelBet}
                 onCashout1={handleCashoutClick}
                 userBet2={userBet2}
+                queuedBet2={queuedBet2}
                 userCashedOut2={userCashedOut2}
                 userCashoutMultiplier2={userCashoutMultiplier2}
                 autoCashoutEnabled2={autoCashoutEnabled2}

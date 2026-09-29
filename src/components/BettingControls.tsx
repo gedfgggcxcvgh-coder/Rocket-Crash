@@ -11,6 +11,7 @@ interface SingleBetPanelProps {
   balance: number;
   currentMultiplier: number;
   userBet: number;
+  queuedBet?: number;
   userCashedOut: boolean;
   userCashoutMultiplier?: number;
   autoCashoutEnabled: boolean;
@@ -30,6 +31,7 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
   balance,
   currentMultiplier,
   userBet,
+  queuedBet = 0,
   userCashedOut,
   userCashoutMultiplier,
   autoCashoutEnabled,
@@ -123,7 +125,20 @@ const SingleBetPanel: React.FC<SingleBetPanelProps> = ({
           </button>
         )}
 
-        {((phase === 'COUNTDOWN' && userBet === 0) || (phase === 'FLYING' && userBet === 0) || phase === 'CRASHED') && (
+        {phase !== 'COUNTDOWN' && queuedBet > 0 && userBet === 0 && (
+          <button
+            type="button"
+            onClick={onCancelBet}
+            className="w-full py-3 rounded-xl bg-amber-950/80 hover:bg-amber-900 border border-amber-600/60 text-amber-300 font-bold text-xs transition-all active:scale-95 cursor-pointer flex flex-col items-center justify-center shadow-lg"
+          >
+            <span>⏳ ĐÃ ĐẶT CHO VÁN SAU</span>
+            <span className="text-[10px] text-amber-400 font-mono">
+              Bấm để hủy ({queuedBet.toLocaleString('vi-VN')} Xu)
+            </span>
+          </button>
+        )}
+
+        {((phase === 'COUNTDOWN' && userBet === 0) || (phase === 'FLYING' && userBet === 0 && queuedBet === 0) || (phase === 'CRASHED' && queuedBet === 0)) && (
           <button
             type="button"
             disabled={balance < numericBet || numericBet <= 0}
@@ -251,6 +266,7 @@ interface BettingControlsProps {
   currentMultiplier: number;
 
   userBet1: number;
+  queuedBet1?: number;
   userCashedOut1: boolean;
   userCashoutMultiplier1?: number;
   autoCashoutEnabled1: boolean;
@@ -262,6 +278,7 @@ interface BettingControlsProps {
   onCashout1: () => void;
 
   userBet2: number;
+  queuedBet2?: number;
   userCashedOut2: boolean;
   userCashoutMultiplier2?: number;
   autoCashoutEnabled2: boolean;
@@ -283,6 +300,7 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
   balance,
   currentMultiplier,
   userBet1,
+  queuedBet1,
   userCashedOut1,
   userCashoutMultiplier1,
   autoCashoutEnabled1,
@@ -293,6 +311,7 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
   onCancelBet1,
   onCashout1,
   userBet2,
+  queuedBet2,
   userCashedOut2,
   userCashoutMultiplier2,
   autoCashoutEnabled2,
@@ -421,6 +440,7 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
             balance={balance}
             currentMultiplier={currentMultiplier}
             userBet={userBet1}
+            queuedBet={queuedBet1}
             userCashedOut={userCashedOut1}
             userCashoutMultiplier={userCashoutMultiplier1}
             autoCashoutEnabled={autoCashoutEnabled1}
@@ -442,6 +462,7 @@ export const BettingControls: React.FC<BettingControlsProps> = ({
             balance={balance}
             currentMultiplier={currentMultiplier}
             userBet={userBet2}
+            queuedBet={queuedBet2}
             userCashedOut={userCashedOut2}
             userCashoutMultiplier={userCashoutMultiplier2}
             autoCashoutEnabled={autoCashoutEnabled2}
